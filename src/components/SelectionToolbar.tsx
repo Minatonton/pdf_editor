@@ -43,6 +43,11 @@ export function SelectionToolbar({
             {preset.label}
           </button>
         ))}
+      {annotation.kind === 'rect' && (
+        <span className="toolbar-note" title="下の文字はファイルに残り、コピーや検索で読める">
+          見た目だけ隠す
+        </span>
+      )}
       {remove}
     </div>
   )

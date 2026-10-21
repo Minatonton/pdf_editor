@@ -254,7 +254,7 @@ export default function App() {
           disabled={!pdf}
           aria-pressed={tool.kind === 'rect'}
           onClick={() => setTool(tool.kind === 'rect' ? { kind: 'select' } : { kind: 'rect', style: RECT_PRESETS[0].style })}
-          title="白い四角を重ねて、元の文字や画像を隠す"
+          title="白い四角を重ねて見えなくする。下の文字はファイルに残り、コピーや検索で読める"
         >
           白塗り
         </button>
