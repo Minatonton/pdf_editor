@@ -1,4 +1,5 @@
 import type { EditorAction } from '../editor/document'
+import { Dialog } from './Dialog'
 import type { PageMarks } from '../editor/pageMarks'
 
 const WATERMARK_PRESETS = ['社外秘', '複製禁止', '下書き', 'CONFIDENTIAL', 'DRAFT']
@@ -17,9 +18,7 @@ export function PageMarksDialog({
   const set = (mark: keyof PageMarks, value: string) => dispatch({ type: 'setPageMark', mark, value })
 
   return (
-    <div className="dialog-backdrop" onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
-      <div className="dialog" role="dialog" aria-label="透かし・ヘッダー・フッター">
-        <h2>透かし・ヘッダー・フッター</h2>
+    <Dialog title="透かし・ヘッダー・フッター" onClose={onClose}>
         <label className="field">
           透かし（全ページの中央に斜めに薄く入れる）
           <input value={marks.watermark} placeholder="例：社外秘" onChange={(event) => set('watermark', event.target.value)} />
@@ -53,7 +52,6 @@ export function PageMarksDialog({
             閉じる
           </button>
         </div>
-      </div>
-    </div>
+    </Dialog>
   )
 }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import type { LoadedImage } from '../annotations/imageFile'
+import { Dialog } from './Dialog'
 import { sealImage, trimmedImage, typedSignature } from '../annotations/signature'
 
 type Mode = 'draw' | 'type' | 'seal'
@@ -103,8 +104,7 @@ export function SignatureDialog({
   const ready = mode === 'draw' || name.trim() !== ''
 
   return (
-    <div className="dialog-backdrop" onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
-      <div className="dialog" role="dialog" aria-label="署名・印鑑を作る">
+    <Dialog title="署名・印鑑を作る" onClose={onClose}>
         <div className="tabs" role="tablist">
           {(
             [
@@ -171,7 +171,6 @@ export function SignatureDialog({
             置く場所を選ぶ
           </button>
         </div>
-      </div>
-    </div>
+    </Dialog>
   )
 }
