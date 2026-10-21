@@ -16,6 +16,18 @@ PDF 編集アプリのレビューや掲示板を読み、このアプリの改�
 | 無料だと思ったら保存に課金が必要で中途半端 | 同上 | 保存に制限を設けない（もともと無料・ローカル） |
 | 機密の書類をクラウドに上げたくない | 記入ツールのまとめ（[Wild & Free Tools](https://wildandfreetools.com/blog/fill-pdf-reddit-best-free-2026/)） | 送信しないことを画面に明示し続ける |
 
+## Acrobat そのものへの不満から取り入れたこと
+
+Acrobat の機能をひととおりそろえたあと、Acrobat より使いやすくするために、Acrobat への不満を読んだ。
+置いたテキストの扱いに関する不満が目立った。
+
+| 不満 | 出どころ | このアプリでの対応 |
+|---|---|---|
+| 置いたテキストボックスや署名が、突然動かせない・大きさを変えられなくなる。モード（PDF を編集・フォームを準備・コメント）によって動かせるものが違い、再起動するしかない | [Adobe Community](https://community.adobe.com/t5/acrobat-discussions/unable-to-resize-text-boxes/m-p/10241965)、[同](https://community.adobe.com/t5/acrobat-discussions/cannot-move-text-boxes-select-text-or-move-tabs-between-two-screens/td-p/14891992)、[同](https://community.adobe.com/t5/acrobat-reader-discussions/cannot-resize-or-move-text-box-or-signature/m-p/13701583/highlight/true) | どの道具を持っていても、置いたものはつかんで動かせるようにする。入力中の文字も、枠のつまみでつかんで動かせるようにする |
+| 置いたテキストボックスが行の中央に勝手に寄せられ、置きたい場所に置けない | [Adobe Community](https://community.adobe.com/t5/acrobat-discussions/when-creating-a-text-box-i-can-no-longer-place-it-where-i-want-or-change-the-size/td-p/9795195) | クリックした場所にそのまま置く（もともとそうしている）。合わせたいときだけ吸着させる |
+| 以前は線にぴたっと合っていた欄が、合わなくなった。入れた文字が下線より浮く | [Adobe Community](https://community.adobe.com/t5/adobe-acrobat-sign-discussions/signature-fields-no-longer-automatically-aligning/m-p/12756844)、[同](https://community.adobe.com/t5/acrobat-discussions/align-text-down/td-p/13549164) | ほかに置いたものの端や中央、元の文字の行の基準線に吸着させ、ガイド線で示す。Alt を押しているあいだは吸着しない |
+| Fill & Sign で並べた文字が、閉じたあとにずれる | [Adobe Community](https://community.adobe.com/questions-18/fill-sign-text-moves-on-close-596730) | 画面と保存で同じ計算で位置を決める（もともとそうしている） |
+
 ## 方針を変えたこと
 
 最初は「元の PDF の文字を直接書き換えたい」という要望を取り入れないことにしていた。
