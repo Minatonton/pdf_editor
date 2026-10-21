@@ -100,4 +100,33 @@ describe('exportPdf', () => {
     const saved = await exportPdf([file], { pages: [ref(0, 0)], annotations: [] })
     expect(await containsMarker(saved)).toBe(false)
   })
+
+  it('削除したページのコメントへの返信を残しても、返信元のコメントの本文は残らない', async () => {
+    const file = await fileWithSecretPage((pdf, secret) => {
+      const original = pdf.context.register(
+        pdf.context.obj({ Type: 'Annot', Subtype: 'Text', P: secret, Contents: PDFString.of('DELETED-PAGE-MARKER') }),
+      )
+      return pdf.context.obj({ Type: 'Annot', Subtype: 'Text', Rect: [0, 0, 10, 10], IRT: original })
+    })
+    const saved = await exportPdf([file], { pages: [ref(0, 0)], annotations: [] })
+    expect(await containsMarker(saved)).toBe(false)
+  })
+
+  it('アクションの連鎖の先が削除したページを指していても、その中身は残らない', async () => {
+    const file = await fileWithSecretPage((pdf, secret) => {
+      const next = pdf.context.obj({ S: 'GoTo', D: [secret, PDFName.of('Fit')] })
+      return pdf.context.obj({ Type: 'Annot', Subtype: 'Link', Rect: [0, 0, 10, 10], A: { S: 'URI', URI: PDFString.of('https://example.com'), Next: next } })
+    })
+    const saved = await exportPdf([file], { pages: [ref(0, 0)], annotations: [] })
+    expect(await containsMarker(saved)).toBe(false)
+  })
+
+  it('別のファイルから足したページのリンクが、足さなかったページを指していても、その中身は残らない', async () => {
+    const base = await pdfWithPages([100, 100])
+    const other = await fileWithSecretPage((pdf, secret) =>
+      pdf.context.obj({ Type: 'Annot', Subtype: 'Link', Rect: [0, 0, 10, 10], AA: { O: { S: 'GoTo', D: [secret, PDFName.of('Fit')] } } }),
+    )
+    const saved = await exportPdf([base, other], { pages: [ref(0, 0), ref(1, 0)], annotations: [] })
+    expect(await containsMarker(saved)).toBe(false)
+  })
 })

@@ -46,8 +46,8 @@ async function arrangePages(files: Uint8Array[], pages: PageRef[]): Promise<{ pd
 
   for (let i = pdf.getPageCount() - 1; i >= 0; i--) pdf.removePage(i)
   for (const page of output) pdf.addPage(page)
-  detachFromOtherPages(copied, output)
-  removeUnreachableObjects(pdf)
+  detachFromOtherPages(copied)
+  removeUnreachableObjects(pdf, output)
   return { pdf, output }
 }
 
