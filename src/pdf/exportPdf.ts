@@ -3,6 +3,7 @@ import { shapePath } from '../annotations/shapePath'
 import { rasterizeText } from '../annotations/textRaster'
 import { BLANK_PAGE_FILE, type EditorDocument, type PageRef } from '../editor/document'
 import { placeInPdf, viewToPdfPoint, type PageBox, type ViewRect } from './geometry'
+import { detachFromOtherPages, removeUnreachableObjects } from './prune'
 
 /**
  * 1つ目のファイルのページをすべて使うときは、それを読み込んだものを土台にしてページを並べ直す。
@@ -21,6 +22,7 @@ async function arrangePages(files: Uint8Array[], pages: PageRef[]): Promise<{ pd
   const sources = new Map<number, PDFDocument>([[0, first]])
   const reused = new Set<number>()
   const output: PDFPage[] = []
+  const copied: PDFPage[] = []
 
   for (const ref of pages) {
     let page: PDFPage
@@ -36,6 +38,7 @@ async function arrangePages(files: Uint8Array[], pages: PageRef[]): Promise<{ pd
         sources.set(ref.file, source)
       }
       ;[page] = await pdf.copyPages(source, [ref.index])
+      copied.push(page)
     }
     page.setRotation(degrees(ref.rotation))
     output.push(page)
@@ -43,6 +46,8 @@ async function arrangePages(files: Uint8Array[], pages: PageRef[]): Promise<{ pd
 
   for (let i = pdf.getPageCount() - 1; i >= 0; i--) pdf.removePage(i)
   for (const page of output) pdf.addPage(page)
+  detachFromOtherPages(copied, output)
+  removeUnreachableObjects(pdf)
   return { pdf, output }
 }
 

@@ -1,4 +1,4 @@
-import { PDFDocument, PDFName, PDFString } from 'pdf-lib'
+import { PDFDocument, PDFName, PDFString, type PDFDict, type PDFObject, type PDFRef } from 'pdf-lib'
 import { describe, expect, it } from 'vitest'
 import type { PageRef } from '../editor/document'
 import { exportPdf } from './exportPdf'
@@ -67,5 +67,37 @@ describe('exportPdf', () => {
     pdf.catalog.set(PDFName.of('Outlines'), pdf.context.obj({ Type: 'Outlines' }))
     const saved = await exportPdf([await pdf.save()], { pages: [ref(0, 0, 90)], annotations: [] })
     expect((await PDFDocument.load(saved)).catalog.has(PDFName.of('Outlines'))).toBe(true)
+  })
+
+  async function fileWithSecretPage(linkFromKeptPage: (pdf: PDFDocument, secret: PDFRef) => PDFObject) {
+    const pdf = await PDFDocument.create()
+    const kept = pdf.addPage([100, 100])
+    const secret = pdf.addPage([100, 100])
+    secret.node.set(PDFName.of('Secret'), PDFString.of('DELETED-PAGE-MARKER'))
+    kept.node.set(PDFName.of('Annots'), pdf.context.obj([pdf.context.register(linkFromKeptPage(pdf, secret.ref) as PDFDict)]))
+    return pdf.save()
+  }
+
+  async function containsMarker(saved: Uint8Array) {
+    const objects = (await PDFDocument.load(saved)).context.enumerateIndirectObjects()
+    return objects.some(([, object]) => object.toString().includes('DELETED-PAGE-MARKER'))
+  }
+
+  it('残したページのリンクが削除したページを指していても、その中身は残らない', async () => {
+    const file = await fileWithSecretPage((pdf, secret) =>
+      pdf.context.obj({ Type: 'Annot', Subtype: 'Link', Rect: [0, 0, 10, 10], Dest: [secret, PDFName.of('Fit')] }),
+    )
+    const saved = await exportPdf([file], { pages: [ref(0, 0)], annotations: [] })
+    expect(await containsMarker(saved)).toBe(false)
+  })
+
+  it('残したページのフォームの欄が、削除したページの部品とつながっていても、その中身は残らない', async () => {
+    const file = await fileWithSecretPage((pdf, secret) => {
+      const otherWidget = pdf.context.register(pdf.context.obj({ Type: 'Annot', Subtype: 'Widget', P: secret }))
+      const field = pdf.context.register(pdf.context.obj({ T: PDFString.of('name'), Kids: [otherWidget] }))
+      return pdf.context.obj({ Type: 'Annot', Subtype: 'Widget', Rect: [0, 0, 10, 10], Parent: field })
+    })
+    const saved = await exportPdf([file], { pages: [ref(0, 0)], annotations: [] })
+    expect(await containsMarker(saved)).toBe(false)
   })
 })
