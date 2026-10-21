@@ -21,6 +21,7 @@ import { openPdf, pageRefsOf, type OpenedPdf } from './pdf/loadPdf'
 type Tool =
   | { kind: 'select' }
   | { kind: 'text' }
+  | { kind: 'stamp'; text: string }
   | { kind: 'image'; image: LoadedImage }
   | { kind: 'rect'; style: RectStyle }
   | { kind: 'shape'; variant: ShapeVariant }
@@ -28,6 +29,13 @@ type Tool =
 const ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2]
 /** 画像の画素を、画面と同じ 96dpi とみなしてポイントに直す */
 const POINTS_PER_PIXEL = 72 / 96
+
+/** フォームになっていない書類に記入するときによく使う記号と、今日の日付 */
+function stampTexts(): string[] {
+  const today = new Date()
+  const date = `${today.getFullYear()}/${today.getMonth() + 1}/${today.getDate()}`
+  return ['✓', '✗', '○', date]
+}
 
 function isEditingField(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
@@ -198,19 +206,15 @@ export default function App() {
 
   const handlePlace = (pageId: string, x: number, y: number) => {
     const id = crypto.randomUUID()
+    // クリックした点が1行目の高さの真ん中に来るようにする。文字の書き出し位置を指す感覚に合わせるため
+    const lineMiddle = y - (textStyle.fontSize * TEXT_LINE_HEIGHT) / 2
     if (tool.kind === 'text') {
-      dispatch({ type: 'add', annotation: {
-          id,
-          kind: 'text',
-          pageId,
-          // クリックした点が1行目の高さの真ん中に来るようにする。文字の書き出し位置を指す感覚に合わせるため
-          x,
-          y: y - (textStyle.fontSize * TEXT_LINE_HEIGHT) / 2,
-          text: '',
-          ...textStyle,
-        },
-      })
+      dispatch({ type: 'add', annotation: { id, kind: 'text', pageId, x, y: lineMiddle, text: '', ...textStyle } })
       setEditingId(id)
+    } else if (tool.kind === 'stamp') {
+      // ✓ などの記号は、チェック欄の真ん中をクリックして置くので、1文字目の中心をクリックした点に合わせる
+      const x0 = x - textStyle.fontSize / 2
+      dispatch({ type: 'add', annotation: { id, kind: 'text', pageId, x: x0, y: lineMiddle, text: tool.text, ...textStyle } })
     } else if (tool.kind === 'image') {
       const page = pages.find((ref) => ref.id === pageId)!
       const pageWidth = viewSizeOf(page).width
@@ -298,6 +302,8 @@ export default function App() {
   const placingHint =
     tool.kind === 'text'
       ? 'テキストを置く場所をクリック'
+      : tool.kind === 'stamp'
+        ? `「${tool.text}」を置く場所をクリック`
       : tool.kind === 'image'
         ? '画像を置く場所をクリック'
         : tool.kind === 'rect'
@@ -332,6 +338,20 @@ export default function App() {
         >
           白塗り
         </button>
+        <select
+          disabled={!pdf}
+          value={tool.kind === 'stamp' ? tool.text : ''}
+          onChange={(event) => setTool(event.target.value ? { kind: 'stamp', text: event.target.value } : { kind: 'select' })}
+          aria-label="スタンプ"
+          data-active={tool.kind === 'stamp'}
+        >
+          <option value="">スタンプ…</option>
+          {stampTexts().map((text) => (
+            <option key={text} value={text}>
+              {text}
+            </option>
+          ))}
+        </select>
         <select
           disabled={!pdf}
           value={tool.kind === 'shape' && tool.variant !== 'ink' ? tool.variant : ''}
