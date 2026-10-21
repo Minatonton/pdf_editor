@@ -35,6 +35,16 @@ describe('exportPdf', () => {
     expect((await pagesOf(saved)).map((page) => page.width)).toEqual([100, 400])
   })
 
+  it('白紙のページを、指定した大きさと向きで差し込める', async () => {
+    const file = await pdfWithPages([100, 100])
+    const blank: PageRef = { id: 'blank', file: -1, index: 0, rotation: 90, width: 250, height: 100 }
+    const saved = await exportPdf([file], { pages: [ref(0, 0), blank], annotations: [] })
+    expect(await pagesOf(saved)).toEqual([
+      { width: 100, rotation: 0 },
+      { width: 250, rotation: 90 },
+    ])
+  })
+
   it('同じページを2回使っても、別々のページとして保存する', async () => {
     const file = await pdfWithPages([100, 100])
     const saved = await exportPdf([file], { pages: [ref(0, 0), { ...ref(0, 0), id: 'copy' }], annotations: [] })

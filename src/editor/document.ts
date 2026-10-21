@@ -13,6 +13,9 @@ export interface PageRef {
   height: number
 }
 
+/** 白紙のページは元になるファイルを持たないので、ファイル番号の代わりにこれを入れる */
+export const BLANK_PAGE_FILE = -1
+
 export interface EditorDocument {
   pages: PageRef[]
   annotations: Annotation[]

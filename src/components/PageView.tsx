@@ -25,7 +25,8 @@ export function PageView({
   dispatch,
 }: {
   page: PageRef
-  proxy: PDFPageProxy
+  /** 白紙のページには元になる PDF のページがない */
+  proxy: PDFPageProxy | undefined
   pageNumber: number
   scale: number
   annotations: Annotation[]
@@ -50,7 +51,8 @@ export function PageView({
   const justDrew = useRef(false)
 
   useEffect(() => {
-    const canvas = canvasRef.current!
+    const canvas = canvasRef.current
+    if (!proxy || !canvas) return
     const viewport = proxy.getViewport({ scale, rotation: page.rotation })
     // 高解像度の画面でぼやけないよう、表示する大きさより画素数を多くして描く
     const ratio = window.devicePixelRatio || 1
@@ -114,8 +116,8 @@ export function PageView({
     : {}
 
   return (
-    <div className="page" style={{ width: size.width * scale, height: size.height * scale }}>
-      <canvas ref={canvasRef} style={{ width: size.width * scale, height: size.height * scale }} />
+    <div className="page" id={`page-${page.id}`} style={{ width: size.width * scale, height: size.height * scale }}>
+      {proxy && <canvas ref={canvasRef} style={{ width: size.width * scale, height: size.height * scale }} />}
       <div className="page-overlay" data-placing={placing} onClick={handleClick} {...drawHandlers}>
         {drawnRect && (
           <div

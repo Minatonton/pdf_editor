@@ -1,6 +1,6 @@
 import { BlendMode, degrees, PDFDocument, rgb, type PDFImage, type PDFPage } from 'pdf-lib'
 import { rasterizeText } from '../annotations/textRaster'
-import type { EditorDocument, PageRef } from '../editor/document'
+import { BLANK_PAGE_FILE, type EditorDocument, type PageRef } from '../editor/document'
 import { placeInPdf, type PageBox, type ViewRect } from './geometry'
 
 /**
@@ -15,7 +15,9 @@ async function arrangePages(files: Uint8Array[], pages: PageRef[]): Promise<{ pd
 
   for (const ref of pages) {
     let page: PDFPage
-    if (ref.file === 0 && !reused.has(ref.index)) {
+    if (ref.file === BLANK_PAGE_FILE) {
+      page = pdf.addPage([ref.width, ref.height])
+    } else if (ref.file === 0 && !reused.has(ref.index)) {
       page = pdf.getPage(ref.index)
       reused.add(ref.index)
     } else {

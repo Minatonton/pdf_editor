@@ -2,8 +2,9 @@ import { useEffect, useReducer, useRef, useState, type DragEvent } from 'react'
 import { loadImageFile, type LoadedImage } from './annotations/imageFile'
 import { TEXT_LINE_HEIGHT } from './annotations/textRaster'
 import { DEFAULT_TEXT_STYLE, RECT_PRESETS, type RectStyle, type TextStyle } from './annotations/types'
+import { PagePanel } from './components/PagePanel'
 import { PageView } from './components/PageView'
-import { EMPTY_HISTORY, editorReducer, viewSizeOf, type EditorAction } from './editor/document'
+import { EMPTY_HISTORY, editorReducer, viewSizeOf, type EditorAction, type PageRef } from './editor/document'
 import { exportPdf } from './pdf/exportPdf'
 import type { ViewRect } from './pdf/geometry'
 import { openPdf, pageRefsOf, type OpenedPdf } from './pdf/loadPdf'
@@ -37,6 +38,9 @@ export default function App() {
   const [history, dispatchHistory] = useReducer(editorReducer, EMPTY_HISTORY)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [selectedPageIds, setSelectedPageIds] = useState<string[]>([])
+  /** PDF を選ぶ欄を、新しく開くために使うか、今の文書に差し込むために使うか */
+  const pdfInputPurpose = useRef<{ insertAt: number } | 'open'>('open')
   const [tool, setTool] = useState<Tool>({ kind: 'select' })
   const [textStyle, setTextStyle] = useState<TextStyle>(DEFAULT_TEXT_STYLE)
   const [zoom, setZoom] = useState(1)
@@ -147,9 +151,34 @@ export default function App() {
       setFiles([opened])
       dispatch({ type: 'open', pages: pageRefsOf(opened, 0) })
       setSelectedId(null)
+      setSelectedPageIds([])
       setTool({ kind: 'select' })
     })
   }
+
+  const handleInsertPdf = (file: File, index: number) => {
+    void run(async () => {
+      const opened = await openPdf(file)
+      const refs = pageRefsOf(opened, files.length)
+      setFiles([...files, opened])
+      dispatch({ type: 'insertPages', pages: refs, index })
+      setSelectedPageIds(refs.map((ref) => ref.id))
+    })
+  }
+
+  const chooseInsertPdf = (index: number) => {
+    pdfInputPurpose.current = { insertAt: index }
+    pdfInput.current?.click()
+  }
+
+  const chooseOpenPdf = () => {
+    pdfInputPurpose.current = 'open'
+    pdfInput.current?.click()
+  }
+
+  const proxyOf = (ref: PageRef) => files[ref.file]?.pages[ref.index]
+
+  const jumpToPage = (id: string) => document.getElementById(`page-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
   const handleChooseImage = (file: File) => {
     void run(async () => setTool({ kind: 'image', image: await loadImageFile(file) }))
@@ -217,11 +246,27 @@ export default function App() {
     })
   }
 
+  const handleExtract = () => {
+    if (!pdf) return
+    const ids = new Set(selectedPageIds)
+    void run(async () => {
+      const bytes = await exportPdf(
+        files.map((file) => file.bytes),
+        { pages: pages.filter((page) => ids.has(page.id)), annotations },
+      )
+      downloadPdf(bytes, `${pdf.name.replace(/\.pdf$/i, '')}_${ids.size}pages.pdf`)
+    })
+  }
+
   const handleDrop = (event: DragEvent) => {
     event.preventDefault()
     const file = event.dataTransfer.files[0]
     if (!file) return
-    if (file.type === 'application/pdf') handleOpenPdf(file)
+    // 開いている文書があれば、落とした PDF は末尾に足す。開き直したいときは「PDF を開く」を使う
+    if (file.type === 'application/pdf') {
+      if (pdf) handleInsertPdf(file, pages.length)
+      else handleOpenPdf(file)
+    }
     else if (file.type.startsWith('image/') && pdf) handleChooseImage(file)
   }
 
@@ -238,7 +283,7 @@ export default function App() {
     <div className="app" onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
       <header className="toolbar">
         <h1>PDF Editor</h1>
-        <button onClick={() => pdfInput.current?.click()}>PDF を開く</button>
+        <button onClick={chooseOpenPdf}>PDF を開く</button>
         <span className="divider" />
         <button
           disabled={!pdf}
@@ -285,7 +330,11 @@ export default function App() {
           hidden
           onChange={(event) => {
             const file = event.target.files?.[0]
-            if (file) handleOpenPdf(file)
+            const purpose = pdfInputPurpose.current
+            if (file) {
+              if (purpose === 'open') handleOpenPdf(file)
+              else handleInsertPdf(file, purpose.insertAt)
+            }
             event.target.value = ''
           }}
         />
@@ -310,6 +359,18 @@ export default function App() {
       )}
 
       <div className="workspace">
+        {pdf && (
+          <PagePanel
+            pages={pages}
+            proxyOf={proxyOf}
+            selectedIds={selectedPageIds}
+            onSelect={setSelectedPageIds}
+            onJump={jumpToPage}
+            onAddFile={chooseInsertPdf}
+            onExtract={handleExtract}
+            dispatch={dispatch}
+          />
+        )}
         {placingHint && <div className="placing-hint">{placingHint}（Esc でやめる）</div>}
         <main className="pages">
           {pdf ? (
@@ -317,7 +378,7 @@ export default function App() {
               <PageView
                 key={ref.id}
                 page={ref}
-                proxy={files[ref.file].pages[ref.index]}
+                proxy={proxyOf(ref)}
                 pageNumber={pageIndex + 1}
                 scale={zoom}
                 annotations={annotations.filter((annotation) => annotation.pageId === ref.id)}
@@ -340,7 +401,7 @@ export default function App() {
           ) : (
             <div className="empty">
               <p>PDF をここにドロップするか、選んで開く</p>
-              <button className="primary" onClick={() => pdfInput.current?.click()} disabled={busy}>
+              <button className="primary" onClick={chooseOpenPdf} disabled={busy}>
                 PDF を開く
               </button>
               <p className="note">ファイルはブラウザの中だけで処理され、どこにも送信されない</p>
