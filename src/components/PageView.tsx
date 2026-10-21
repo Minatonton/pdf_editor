@@ -16,6 +16,7 @@ export function PageView({
   proxy,
   pageNumber,
   pageCount,
+  pageOptions,
   pageMarks,
   scale,
   annotations,
@@ -41,6 +42,8 @@ export function PageView({
   proxy: PDFPageProxy | undefined
   pageNumber: number
   pageCount: number
+  /** リンクの移り先に選べるページ */
+  pageOptions: { id: string; label: string }[]
   pageMarks: PageMarks
   scale: number
   annotations: Annotation[]
@@ -224,7 +227,7 @@ export function PageView({
           />
         ))}
         {selected && !placing && (
-          <SelectionToolbar annotation={selected} scale={scale} onRemove={() => onRemove(selected.id)} dispatch={dispatch} />
+          <SelectionToolbar annotation={selected} scale={scale} pageOptions={pageOptions} onRemove={() => onRemove(selected.id)} dispatch={dispatch} />
         )}
       </div>
       <span className="page-number">

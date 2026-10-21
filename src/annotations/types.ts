@@ -51,6 +51,18 @@ export interface NoteAnnotation extends Placed {
   text: string
 }
 
+/**
+ * リンク。範囲をクリックすると、URL を開くか、文書の中の別のページへ移る。
+ * 付箋と同じく PDF の注釈（Link）として保存し、ページには描かない
+ */
+export interface LinkAnnotation extends Placed {
+  kind: 'link'
+  width: number
+  height: number
+  /** URL か、移り先のページの ID のどちらか */
+  target: { url: string } | { pageId: string }
+}
+
 /** 付箋の印の大きさ（ポイント）。Acrobat の付箋の印とほぼ同じ */
 export const NOTE_ICON_SIZE = 20
 
@@ -67,9 +79,9 @@ export interface ShapeAnnotation extends Placed {
   strokeWidth: number
 }
 
-export type Annotation = TextAnnotation | ImageAnnotation | RectAnnotation | ShapeAnnotation | RedactionAnnotation | NoteAnnotation
+export type Annotation = TextAnnotation | ImageAnnotation | RectAnnotation | ShapeAnnotation | RedactionAnnotation | NoteAnnotation | LinkAnnotation
 
-export type BoxAnnotation = ImageAnnotation | RectAnnotation | ShapeAnnotation | RedactionAnnotation
+export type BoxAnnotation = ImageAnnotation | RectAnnotation | ShapeAnnotation | RedactionAnnotation | LinkAnnotation
 
 export type TextStyle = Pick<TextAnnotation, 'fontSize' | 'color'>
 

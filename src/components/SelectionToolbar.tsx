@@ -1,5 +1,6 @@
 import { whiteToTransparent } from '../annotations/imageFile'
-import { RECT_PRESETS, type Annotation } from '../annotations/types'
+import { safeLinkUrl } from '../annotations/linkUrl'
+import { RECT_PRESETS, type Annotation, type LinkAnnotation } from '../annotations/types'
 import type { EditorAction } from '../editor/document'
 
 const FONT_SIZES = [8, 10, 12, 14, 16, 20, 24, 32, 40, 48, 64, 72]
@@ -9,11 +10,13 @@ const COLORS = ['#111111', '#d6403f', '#2f6fd0', '#2f9e5b']
 export function SelectionToolbar({
   annotation,
   scale,
+  pageOptions,
   onRemove,
   dispatch,
 }: {
   annotation: Annotation
   scale: number
+  pageOptions: { id: string; label: string }[]
   onRemove: () => void
   dispatch: (action: EditorAction) => void
 }) {
@@ -59,6 +62,7 @@ export function SelectionToolbar({
         </button>
       )}
       {annotation.kind === 'shape' && <ShapeControls annotation={annotation} dispatch={dispatch} />}
+      {annotation.kind === 'link' && <LinkControls annotation={annotation} pageOptions={pageOptions} dispatch={dispatch} />}
       {annotation.kind === 'note' && (
         <textarea
           // 置いた直後にそのまま書き始められるよう、選ぶたびに入力欄へ移す
@@ -149,6 +153,55 @@ function ShapeControls({
         />
       ))}
       <input type="color" value={annotation.color} onChange={(event) => edit({ color: event.target.value })} title="ほかの色" />
+    </>
+  )
+}
+
+function LinkControls({
+  annotation,
+  pageOptions,
+  dispatch,
+}: {
+  annotation: LinkAnnotation
+  pageOptions: { id: string; label: string }[]
+  dispatch: (action: EditorAction) => void
+}) {
+  const { target } = annotation
+  const url = 'url' in target ? target.url : null
+  const invalid = url !== null && url.trim() !== '' && !safeLinkUrl(url)
+  return (
+    <>
+      <select
+        value={'pageId' in target ? target.pageId : 'url'}
+        onChange={(event) =>
+          dispatch({
+            type: 'editLink',
+            id: annotation.id,
+            target: event.target.value === 'url' ? { url: '' } : { pageId: event.target.value },
+          })
+        }
+        title="リンクの移り先"
+      >
+        <option value="url">URL を開く</option>
+        {pageOptions.map((page) => (
+          <option key={page.id} value={page.id}>
+            {page.label}へ移る
+          </option>
+        ))}
+      </select>
+      {url !== null && (
+        <input
+          // 置いた直後にそのまま URL を打てるよう、選ぶたびに入力欄へ移す
+          key={annotation.id}
+          autoFocus
+          className="link-input"
+          aria-invalid={invalid}
+          placeholder="https://..."
+          value={url}
+          onChange={(event) => dispatch({ type: 'editLink', id: annotation.id, target: { url: event.target.value } })}
+          title={invalid ? 'http(s)・mailto・tel の URL だけ使える。それ以外は保存されない' : 'リンク先の URL'}
+        />
+      )}
     </>
   )
 }

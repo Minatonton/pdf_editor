@@ -1,7 +1,8 @@
-import { PDFArray, PDFDocument, PDFHexString, PDFName, PDFString, type PDFDict, type PDFObject, type PDFRef } from 'pdf-lib'
+import { PDFArray, PDFDict, PDFDocument, PDFHexString, PDFName, PDFString, type PDFObject, type PDFRef } from 'pdf-lib'
 import { describe, expect, it } from 'vitest'
 import type { PageRef } from '../editor/document'
 import { NO_PAGE_MARKS } from '../editor/pageMarks'
+import type { LinkAnnotation } from '../annotations/types'
 import { exportPdf } from './exportPdf'
 
 async function pdfWithPages(...sizes: [number, number][]): Promise<Uint8Array> {
@@ -259,6 +260,37 @@ describe('exportPdf', () => {
     expect(annotation.get(PDFName.of('Subtype'))).toBe(PDFName.of('Text'))
     expect((annotation.lookup(PDFName.of('Contents')) as PDFHexString).decodeText()).toBe('確認お願いします')
     expect(annotation.lookup(PDFName.of('Rect'), PDFArray).asArray().map((n) => n.toString())).toEqual(['10', '260', '30', '280'])
+  })
+
+  describe('リンク', () => {
+    const pages = [{ ...ref(0, 0), width: 300, height: 300 }, { ...ref(0, 1), width: 300, height: 300 }]
+    const link = (target: LinkAnnotation['target']): LinkAnnotation => ({ id: 'l', kind: 'link', pageId: '0-0', x: 10, y: 10, width: 50, height: 20, target })
+    const actionOf = async (saved: Uint8Array) => {
+      const page = (await PDFDocument.load(saved)).getPage(0)
+      const annotations = page.node.Annots()?.asArray() ?? []
+      return annotations.map((r) => (page.doc.context.lookup(r) as PDFDict).lookup(PDFName.of('A'), PDFDict))
+    }
+
+    it('URL へのリンクは、開くとその URL に移る注釈として保存する', async () => {
+      const file = await pdfWithPages([300, 300], [300, 300])
+      const saved = await exportPdf([file], { pages, annotations: [link({ url: 'https://example.com/' })], formValues: {}, pageMarks: NO_PAGE_MARKS })
+      const [action] = await actionOf(saved)
+      expect(action.get(PDFName.of('URI'))?.toString()).toBe('(https://example.com/)')
+    })
+
+    it('ページへのリンクは、保存した文書の中のそのページへ移る', async () => {
+      const file = await pdfWithPages([300, 300], [300, 300])
+      const saved = await exportPdf([file], { pages, annotations: [link({ pageId: '0-1' })], formValues: {}, pageMarks: NO_PAGE_MARKS })
+      const loaded = await PDFDocument.load(saved)
+      const [action] = await actionOf(saved)
+      expect(action.lookup(PDFName.of('D'), PDFArray).get(0)).toBe(loaded.getPage(1).ref)
+    })
+
+    it('開いた人の環境で何かを実行させうる URL は、保存の直前にも弾く', async () => {
+      const file = await pdfWithPages([300, 300], [300, 300])
+      const saved = await exportPdf([file], { pages, annotations: [link({ url: 'javascript:alert(1)' })], formValues: {}, pageMarks: NO_PAGE_MARKS })
+      expect(await actionOf(saved)).toEqual([])
+    })
   })
 
   describe('フォームの欄', () => {

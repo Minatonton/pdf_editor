@@ -10,6 +10,7 @@ export type Tool =
   | { kind: 'select' }
   | { kind: 'text' }
   | { kind: 'note' }
+  | { kind: 'link' }
   | { kind: 'editText' }
   | { kind: 'markText'; mark: TextMark }
   | { kind: 'stamp'; text: string }

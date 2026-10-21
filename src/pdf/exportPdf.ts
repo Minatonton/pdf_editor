@@ -1,7 +1,8 @@
-import { BlendMode, degrees, LineCapStyle, PDFDocument, PDFHexString, PDFString, rgb, type PDFImage, type PDFPage } from 'pdf-lib'
+import { BlendMode, degrees, LineCapStyle, PDFDocument, PDFHexString, PDFName, PDFString, rgb, type PDFImage, type PDFPage } from 'pdf-lib'
 import { shapePath } from '../annotations/shapePath'
 import { rasterizeText } from '../annotations/textRaster'
-import { NOTE_ICON_SIZE, type NoteAnnotation } from '../annotations/types'
+import { safeLinkUrl } from '../annotations/linkUrl'
+import { NOTE_ICON_SIZE, type LinkAnnotation, type NoteAnnotation } from '../annotations/types'
 import { BLANK_PAGE_FILE, fieldKey, viewSizeOf, type EditorDocument, type FieldValue, type PageRef } from '../editor/document'
 import { expandMark, type PageMarks } from '../editor/pageMarks'
 import { placeCenteredInPdf, placeInPdf, viewToPdfPoint, type PageBox, type Point, type Rotation, type ViewRect } from './geometry'
@@ -115,6 +116,12 @@ export async function exportPdf(
     // 墨消しの範囲は、ページを画像にしたときにすでに塗ってある
     if (annotation.kind === 'redaction') continue
 
+    if (annotation.kind === 'link') {
+      const destination = 'url' in annotation.target ? undefined : pageById.get(annotation.target.pageId)?.page
+      addLink(pdf, target.page, annotation, box, target.ref.rotation, destination)
+      continue
+    }
+
     if (annotation.kind === 'note') {
       if (annotation.text.trim() !== '') addNote(pdf, target.page, annotation, box, target.ref.rotation)
       continue
@@ -188,6 +195,28 @@ async function drawPageMarks(pdf: PDFDocument, refs: PageRef[], output: PDFPage[
     await draw(marks.header, { x: view.width / 2, y: MARK_MARGIN }, 10, '#333333', 0, 1)
     await draw(marks.footer, { x: view.width / 2, y: view.height - MARK_MARGIN }, 10, '#333333', 0, 1)
   }
+}
+
+/**
+ * リンクは PDF の注釈（Link）として足す。URL は保存の直前にも確かめ直す。
+ * 移り先のページが削除されていたら、飛び先のないリンクになるので足さない
+ */
+function addLink(pdf: PDFDocument, page: PDFPage, link: LinkAnnotation, box: PageBox, rotation: Rotation, destination?: PDFPage) {
+  const url = 'url' in link.target ? safeLinkUrl(link.target.url) : null
+  if (!url && !destination) return
+  const a = viewToPdfPoint(link.x, link.y, box, rotation)
+  const b = viewToPdfPoint(link.x + link.width, link.y + link.height, box, rotation)
+  const action = url
+    ? { S: 'URI', URI: PDFString.of(url) }
+    : { S: 'GoTo', D: [destination!.ref, PDFName.of('Fit')] }
+  const annotation = pdf.context.obj({
+    Type: 'Annot',
+    Subtype: 'Link',
+    Rect: [Math.min(a.x, b.x), Math.min(a.y, b.y), Math.max(a.x, b.x), Math.max(a.y, b.y)],
+    Border: [0, 0, 0],
+    A: action,
+  })
+  page.node.addAnnot(pdf.context.register(annotation))
 }
 
 /** 付箋は PDF の注釈（Text）として足す。ほかのビューアーでもコメントとして開け、印刷には出ない */

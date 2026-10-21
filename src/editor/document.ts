@@ -1,5 +1,5 @@
 import { resizeBox } from '../annotations/boxSize'
-import type { Annotation, RectStyle, ShapeStyle, TextAnnotation } from '../annotations/types'
+import type { Annotation, LinkAnnotation, RectStyle, ShapeStyle, TextAnnotation } from '../annotations/types'
 import { NO_PAGE_MARKS, type PageMarks } from './pageMarks'
 import { normalizeRotation, pdfToViewPoint, viewToPdfPoint, type PageBox, type Rotation } from '../pdf/geometry'
 
@@ -54,6 +54,7 @@ export type EditorAction =
   | { type: 'editText'; id: string; changes: Partial<Pick<TextAnnotation, 'text' | 'fontSize' | 'color'>> }
   | { type: 'remove'; id: string }
   | { type: 'editNote'; id: string; text: string }
+  | { type: 'editLink'; id: string; target: LinkAnnotation['target'] }
   | { type: 'replaceImage'; id: string; bytes: Uint8Array; format: 'png' | 'jpeg' }
   | { type: 'setField'; key: string; value: FieldValue }
   | { type: 'setPageMark'; mark: keyof PageMarks; value: string }
@@ -138,6 +139,11 @@ export function editorReducer(history: History, action: EditorAction): History {
       return updateAnnotation(history, action.id, (a) =>
         a.kind === 'image' ? { ...a, bytes: action.bytes, format: action.format } : a,
       )
+    case 'editLink':
+      return typed(history, action.id, {
+        ...present,
+        annotations: present.annotations.map((a) => (a.id === action.id && a.kind === 'link' ? { ...a, target: action.target } : a)),
+      })
     case 'editNote':
       return typed(history, action.id, {
         ...present,

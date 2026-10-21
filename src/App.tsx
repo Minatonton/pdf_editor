@@ -248,6 +248,8 @@ export default function App() {
     pdfInput.current?.click()
   }
 
+  const pageOptions = pages.map((page, i) => ({ id: page.id, label: `${i + 1} ページ` }))
+
   const proxyOf = (ref: PageRef) => files[ref.file]?.pages[ref.index]
 
   const jumpToPage = (id: string) => document.getElementById(`page-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -306,6 +308,8 @@ export default function App() {
     const lineBox = clicked ? { x: rect.x, y: rect.y - 12, width: 120, height: 24 } : rect
     if (tool.kind === 'rect') {
       dispatch({ type: 'add', annotation: { id, kind: 'rect', pageId, ...lineBox, ...tool.style } })
+    } else if (tool.kind === 'link') {
+      dispatch({ type: 'add', annotation: { id, kind: 'link', pageId, ...lineBox, target: { url: '' } } })
     } else if (tool.kind === 'redaction') {
       dispatch({ type: 'add', annotation: { id, kind: 'redaction', pageId, ...lineBox } })
     } else if (tool.kind === 'shape') {
@@ -434,7 +438,9 @@ export default function App() {
   const placingHint =
     tool.kind === 'editText'
       ? '書き換えたい文字の行をクリック'
-      : tool.kind === 'note'
+      : tool.kind === 'link'
+        ? 'リンクにする範囲をドラッグ'
+        : tool.kind === 'note'
         ? '付箋を貼る場所をクリック'
         : tool.kind === 'markText'
         ? '印を付けたい文字の上をドラッグ（続けて何か所でも付けられる）'
@@ -574,13 +580,14 @@ export default function App() {
                 proxy={proxyOf(ref)}
                 pageNumber={pageIndex + 1}
                 pageCount={pages.length}
+                pageOptions={pageOptions}
                 pageMarks={history.present.pageMarks}
                 scale={zoom}
                 annotations={annotations.filter((annotation) => annotation.pageId === ref.id)}
                 selectedId={selectedId}
                 editingId={editingId}
                 placing={tool.kind !== 'select'}
-                drawMode={tool.kind === 'rect' || tool.kind === 'redaction' || tool.kind === 'markText' || (tool.kind === 'shape' && tool.variant !== 'ink') ? 'box' : tool.kind === 'shape' ? 'ink' : null}
+                drawMode={tool.kind === 'rect' || tool.kind === 'redaction' || tool.kind === 'link' || tool.kind === 'markText' || (tool.kind === 'shape' && tool.variant !== 'ink') ? 'box' : tool.kind === 'shape' ? 'ink' : null}
                 onPlace={handlePlace}
                 onDraw={handleDraw}
                 textMode={tool.kind === 'editText' ? 'pick' : tool.kind === 'markText' ? 'mark' : null}

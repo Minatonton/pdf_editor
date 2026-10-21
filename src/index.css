@@ -709,3 +709,23 @@ input.form-field[type='radio'] {
   width: 32px;
   padding: 0;
 }
+
+/* リンクはページに描かれないので、編集中だけ範囲を示す */
+.annotation.link {
+  border: 1px dashed var(--accent);
+  background: rgb(47 111 208 / 0.08);
+}
+
+.selection-toolbar .link-input {
+  width: 220px;
+  height: 28px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+
+.selection-toolbar .link-input[aria-invalid='true'] {
+  border-color: var(--danger);
+  color: var(--danger);
+}

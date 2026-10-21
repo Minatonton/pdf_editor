@@ -48,6 +48,9 @@ export function ToolBar({
         <button aria-pressed={tool.kind === 'image'} onClick={onChooseImage} title="画像を選んで置く">
           画像
         </button>
+        <button aria-pressed={tool.kind === 'link'} onClick={() => toggle({ kind: 'link' })} title="範囲を描いて、URL かページへのリンクにする">
+          リンク
+        </button>
       </Group>
 
       <Group label="コメント">
