@@ -1,5 +1,5 @@
 import { useState, type PointerEvent } from 'react'
-import type { HistoryAction } from '../annotations/history'
+import type { EditorAction } from '../editor/document'
 import { mimeTypeOf } from '../annotations/imageFile'
 import { TEXT_FONT_FAMILY, TEXT_LINE_HEIGHT } from '../annotations/textRaster'
 import { MIN_IMAGE_WIDTH, type Annotation, type ImageAnnotation } from '../annotations/types'
@@ -40,7 +40,7 @@ export function AnnotationBox({
   selected: boolean
   interactive: boolean
   onSelect: (id: string) => void
-  dispatch: (action: HistoryAction) => void
+  dispatch: (action: EditorAction) => void
 }) {
   // ドラッグ中は位置を手元だけで動かし、離したときに1回だけ履歴に積む。
   // 動かすたびに積むと、元に戻すがドラッグの途中の位置を1つずつたどることになる

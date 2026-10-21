@@ -1,4 +1,4 @@
-import type { HistoryAction } from '../annotations/history'
+import type { EditorAction } from '../editor/document'
 import type { Annotation } from '../annotations/types'
 
 const FONT_SIZES = [8, 10, 12, 14, 16, 20, 24, 32, 40, 48, 64, 72]
@@ -8,7 +8,7 @@ export function Inspector({
   dispatch,
 }: {
   annotation: Annotation | undefined
-  dispatch: (action: HistoryAction) => void
+  dispatch: (action: EditorAction) => void
 }) {
   if (!annotation) {
     return (

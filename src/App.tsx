@@ -1,11 +1,11 @@
 import { useEffect, useReducer, useRef, useState, type DragEvent } from 'react'
-import { EMPTY_HISTORY, historyReducer, type HistoryAction } from './annotations/history'
 import { loadImageFile, type LoadedImage } from './annotations/imageFile'
 import { DEFAULT_TEXT_STYLE, type TextStyle } from './annotations/types'
 import { Inspector } from './components/Inspector'
 import { PageView } from './components/PageView'
+import { EMPTY_HISTORY, editorReducer, viewSizeOf, type EditorAction } from './editor/document'
 import { exportPdf } from './pdf/exportPdf'
-import { openPdf, type OpenedPdf } from './pdf/loadPdf'
+import { openPdf, pageRefsOf, type OpenedPdf } from './pdf/loadPdf'
 
 type Tool = { kind: 'select' } | { kind: 'text' } | { kind: 'image'; image: LoadedImage }
 
@@ -27,8 +27,9 @@ function downloadPdf(bytes: Uint8Array, name: string) {
 }
 
 export default function App() {
-  const [pdf, setPdf] = useState<OpenedPdf | null>(null)
-  const [history, dispatchHistory] = useReducer(historyReducer, EMPTY_HISTORY)
+  /** 開いた PDF。保存する文書は2つ目以降のファイルのページも含められるので、ファイル番号で引く */
+  const [files, setFiles] = useState<OpenedPdf[]>([])
+  const [history, dispatchHistory] = useReducer(editorReducer, EMPTY_HISTORY)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [tool, setTool] = useState<Tool>({ kind: 'select' })
   const [textStyle, setTextStyle] = useState<TextStyle>(DEFAULT_TEXT_STYLE)
@@ -38,12 +39,13 @@ export default function App() {
   const pdfInput = useRef<HTMLInputElement>(null)
   const imageInput = useRef<HTMLInputElement>(null)
 
-  const annotations = history.present
+  const { pages, annotations } = history.present
+  const pdf = files.at(0)
   const selected = annotations.find((annotation) => annotation.id === selectedId)
-  const hasEdits = annotations.length > 0
+  const hasEdits = history.past.length > 0
 
   // 次に置くテキストは、最後に変えたサイズと色を引き継ぐ
-  const dispatch = (action: HistoryAction) => {
+  const dispatch = (action: EditorAction) => {
     if (action.type === 'editText') {
       const { fontSize, color } = action.changes
       setTextStyle((style) => ({ fontSize: fontSize ?? style.fontSize, color: color ?? style.color }))
@@ -112,9 +114,9 @@ export default function App() {
     if (hasEdits && !window.confirm('書き込んだ内容は保存されていません。別の PDF を開きますか？')) return
     void run(async () => {
       const opened = await openPdf(file)
-      void pdf?.document.loadingTask.destroy()
-      setPdf(opened)
-      dispatch({ type: 'reset' })
+      for (const old of files) void old.document.loadingTask.destroy()
+      setFiles([opened])
+      dispatch({ type: 'open', pages: pageRefsOf(opened, 0) })
       setSelectedId(null)
       setTool({ kind: 'select' })
     })
@@ -124,12 +126,13 @@ export default function App() {
     void run(async () => setTool({ kind: 'image', image: await loadImageFile(file) }))
   }
 
-  const handlePlace = (pageIndex: number, x: number, y: number) => {
+  const handlePlace = (pageId: string, x: number, y: number) => {
     const id = crypto.randomUUID()
     if (tool.kind === 'text') {
-      dispatch({ type: 'add', annotation: { id, kind: 'text', pageIndex, x, y, text: 'テキスト', ...textStyle } })
-    } else if (tool.kind === 'image' && pdf) {
-      const pageWidth = pdf.pages[pageIndex].getViewport({ scale: 1 }).width
+      dispatch({ type: 'add', annotation: { id, kind: 'text', pageId, x, y, text: 'テキスト', ...textStyle } })
+    } else if (tool.kind === 'image') {
+      const page = pages.find((ref) => ref.id === pageId)!
+      const pageWidth = viewSizeOf(page).width
       const { image } = tool
       const width = Math.min(image.pixelWidth * POINTS_PER_PIXEL, pageWidth / 2)
       const height = (image.pixelHeight * width) / image.pixelWidth
@@ -138,7 +141,7 @@ export default function App() {
         annotation: {
           id,
           kind: 'image',
-          pageIndex,
+          pageId,
           x: x - width / 2,
           y: y - height / 2,
           width,
@@ -155,7 +158,10 @@ export default function App() {
   const handleExport = () => {
     if (!pdf) return
     void run(async () => {
-      const bytes = await exportPdf(pdf.bytes, annotations)
+      const bytes = await exportPdf(
+        files.map((file) => file.bytes),
+        history.present,
+      )
       downloadPdf(bytes, `${pdf.name.replace(/\.pdf$/i, '')}_edited.pdf`)
     })
   }
@@ -242,13 +248,14 @@ export default function App() {
         <main className="pages">
           {placingHint && <div className="placing-hint">{placingHint}（Esc でやめる）</div>}
           {pdf ? (
-            pdf.pages.map((page, pageIndex) => (
+            pages.map((ref, pageIndex) => (
               <PageView
-                key={pageIndex}
-                page={page}
-                pageIndex={pageIndex}
+                key={ref.id}
+                page={ref}
+                proxy={files[ref.file].pages[ref.index]}
+                pageNumber={pageIndex + 1}
                 scale={zoom}
-                annotations={annotations.filter((annotation) => annotation.pageIndex === pageIndex)}
+                annotations={annotations.filter((annotation) => annotation.pageId === ref.id)}
                 selectedId={selectedId}
                 placing={tool.kind !== 'select'}
                 onPlace={handlePlace}

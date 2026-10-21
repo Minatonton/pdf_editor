@@ -1,7 +1,7 @@
 /** 位置と大きさは、画面に見えている向きでのページ座標（左上が原点、単位はポイント） */
 interface Placed {
   id: string
-  pageIndex: number
+  pageId: string
   x: number
   y: number
 }
