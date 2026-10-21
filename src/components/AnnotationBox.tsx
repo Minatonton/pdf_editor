@@ -14,6 +14,9 @@ interface Drag {
   /** 文字の大きさを変えるときの基準。ドラッグを始めたときの見た目の幅 */
   startWidth: number
   startHeight: number
+  /** つかんだときの画面上の位置。別のページで離したとき、そのページでの位置を求めるのに使う */
+  startLeft: number
+  startTop: number
   dx: number
   dy: number
 }
@@ -85,7 +88,8 @@ export function AnnotationBox({
     onSelect(annotation.id)
     event.currentTarget.setPointerCapture(event.pointerId)
     const { offsetWidth: startWidth, offsetHeight: startHeight } = box.current!
-    setDrag({ mode, startX: event.clientX, startY: event.clientY, startWidth, startHeight, dx: 0, dy: 0 })
+    const { left: startLeft, top: startTop } = box.current!.getBoundingClientRect()
+    setDrag({ mode, startX: event.clientX, startY: event.clientY, startWidth, startHeight, startLeft, startTop, dx: 0, dy: 0 })
   }
 
   /** 押した位置からのずれ（画面の画素）。動かすときは吸い寄せた分も足す */
@@ -121,7 +125,18 @@ export function AnnotationBox({
     onSnapEnd()
     const dx = final.dx / scale
     const dy = final.dy / scale
-    if (drag.mode === 'move') {
+    const otherPage = drag.mode === 'move' && !onGroupDrag ? pageUnder(event, annotation.pageId) : null
+    if (otherPage) {
+      // 1つだけ動かしていて別のページで離したときは、そのページへ移す。複数のときは、ページをまたぐと並びが崩れるので移さない
+      const origin = otherPage.overlay.getBoundingClientRect()
+      dispatch({
+        type: 'moveToPage',
+        id: annotation.id,
+        pageId: otherPage.pageId,
+        x: (drag.startLeft + final.dx - origin.left) / scale,
+        y: (drag.startTop + final.dy - origin.top) / scale,
+      })
+    } else if (drag.mode === 'move') {
       if (dx !== 0 || dy !== 0) onMoved(annotation.id, dx, dy)
       else onGroupDrag?.(null)
     }
@@ -264,6 +279,15 @@ export function AnnotationBox({
       )}
     </div>
   )
+}
+
+/** 指の下にある、自分とは別のページ */
+function pageUnder(event: PointerEvent<HTMLElement>, ownPageId: string) {
+  const overlay = document
+    .elementsFromPoint(event.clientX, event.clientY)
+    .find((element): element is HTMLElement => element instanceof HTMLElement && element.classList.contains('page-overlay'))
+  const pageId = overlay?.dataset.pageId
+  return overlay && pageId && pageId !== ownPageId ? { overlay, pageId } : null
 }
 
 function resizedBox(annotation: BoxAnnotation, dx: number, dy: number) {

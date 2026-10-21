@@ -50,6 +50,11 @@ describe('配置した要素の編集', () => {
     expect(editorReducer(history, { type: 'undo' }).present.annotations.map((a) => [a.x, a.y])).toEqual([[10, 20], [0, 0]])
   })
 
+  it('別のページへ移すと、移した先のページでの位置になる', () => {
+    const { present } = run({ type: 'add', annotation: text }, { type: 'moveToPage', id: 't', pageId: 'p2', x: 40, y: 50 })
+    expect(present.annotations[0]).toMatchObject({ pageId: 'p2', x: 40, y: 50 })
+  })
+
   it('選んだものをまとめて消せる', () => {
     const { present } = run({ type: 'addMany', annotations: [text, image] }, { type: 'removeMany', ids: ['t', 'i'] })
     expect(present.annotations).toEqual([])

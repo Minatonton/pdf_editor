@@ -56,6 +56,8 @@ export type EditorAction =
   /** 選んだものをまとめて動かす。揃えるときはものごとに動かす量が違うので、それぞれに持たせる */
   | { type: 'moveEach'; moves: { id: string; dx: number; dy: number }[] }
   | { type: 'removeMany'; ids: string[] }
+  /** 別のページへ移す。x, y は移した先のページでの位置 */
+  | { type: 'moveToPage'; id: string; pageId: string; x: number; y: number }
   | { type: 'resize'; id: string; width: number; height: number }
   | { type: 'editRect'; id: string; changes: Partial<RectStyle> }
   | { type: 'editShape'; id: string; changes: Partial<ShapeStyle> }
@@ -160,6 +162,8 @@ export function editorReducer(history: History, action: EditorAction): History {
         }),
       })
     }
+    case 'moveToPage':
+      return updateAnnotation(history, action.id, (a) => ({ ...a, pageId: action.pageId, x: action.x, y: action.y }))
     case 'removeMany': {
       const ids = new Set(action.ids)
       return commit(history, { ...present, annotations: present.annotations.filter((a) => !ids.has(a.id)) })

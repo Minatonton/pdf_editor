@@ -241,6 +241,7 @@ export function PageView({
       <div
         ref={overlayRef}
         className="page-overlay"
+        data-page-id={page.id}
         data-placing={placing}
         style={{ left: -visible.x * scale, top: -visible.y * scale, width: size.width * scale, height: size.height * scale }}
         onClick={handleClick}
