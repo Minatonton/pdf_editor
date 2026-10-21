@@ -1,5 +1,5 @@
 import { MIN_BOX_SIZE, type Annotation, type RectStyle, type TextAnnotation } from '../annotations/types'
-import { normalizeRotation, type Rotation } from '../pdf/geometry'
+import { normalizeRotation, pdfToViewPoint, viewToPdfPoint, type PageBox, type Rotation } from '../pdf/geometry'
 
 /** 保存する PDF の1ページ。どのファイルの何ページ目を、どの向きで使うか */
 export interface PageRef {
@@ -35,6 +35,11 @@ export type EditorAction =
   | { type: 'editRect'; id: string; changes: Partial<RectStyle> }
   | { type: 'editText'; id: string; changes: Partial<Pick<TextAnnotation, 'text' | 'fontSize' | 'color'>> }
   | { type: 'remove'; id: string }
+  | { type: 'rotatePages'; ids: string[]; degrees: 90 | -90 }
+  | { type: 'removePages'; ids: string[] }
+  /** ids のページを、残りのページの並びで index の位置に移す（ids の順番は今の並び順を保つ） */
+  | { type: 'movePages'; ids: string[]; index: number }
+  | { type: 'insertPages'; pages: PageRef[]; index: number }
   | { type: 'undo' }
   | { type: 'redo' }
 
@@ -47,6 +52,22 @@ export function viewSizeOf(page: PageRef): { width: number; height: number } {
 
 export function rotateBy(rotation: Rotation, degrees: number): Rotation {
   return normalizeRotation(rotation + degrees)
+}
+
+/**
+ * ページを回しても、置いたものは紙の同じ場所に留め、向きは画面に対して正立させたままにする。
+ * 置いたものごと回すと、テキストが横倒しになって読めなくなるため。
+ * テキストは大きさが分からないので左上を、四角や画像は中心を、紙の同じ場所に合わせる
+ */
+function rotateAnnotation(annotation: Annotation, page: PageRef, rotation: Rotation): Annotation {
+  const box: PageBox = { left: 0, bottom: 0, right: page.width, top: page.height }
+  const keepPoint = (x: number, y: number) => {
+    const onPaper = viewToPdfPoint(x, y, box, page.rotation)
+    return pdfToViewPoint(onPaper.x, onPaper.y, box, rotation)
+  }
+  if (annotation.kind === 'text') return { ...annotation, ...keepPoint(annotation.x, annotation.y) }
+  const center = keepPoint(annotation.x + annotation.width / 2, annotation.y + annotation.height / 2)
+  return { ...annotation, x: center.x - annotation.width / 2, y: center.y - annotation.height / 2 }
 }
 
 function commit(history: History, present: EditorDocument): History {
@@ -87,6 +108,42 @@ export function editorReducer(history: History, action: EditorAction): History {
     }
     case 'remove':
       return commit(history, { ...present, annotations: present.annotations.filter((a) => a.id !== action.id) })
+    case 'rotatePages': {
+      const ids = new Set(action.ids)
+      const rotated = new Map(
+        present.pages.filter((page) => ids.has(page.id)).map((page) => [page.id, rotateBy(page.rotation, action.degrees)]),
+      )
+      const pageById = new Map(present.pages.map((page) => [page.id, page]))
+      return commit(history, {
+        pages: present.pages.map((page) => (rotated.has(page.id) ? { ...page, rotation: rotated.get(page.id)! } : page)),
+        annotations: present.annotations.map((annotation) =>
+          rotated.has(annotation.pageId)
+            ? rotateAnnotation(annotation, pageById.get(annotation.pageId)!, rotated.get(annotation.pageId)!)
+            : annotation,
+        ),
+      })
+    }
+    case 'removePages': {
+      const ids = new Set(action.ids)
+      if (present.pages.every((page) => ids.has(page.id))) return history
+      return commit(history, {
+        pages: present.pages.filter((page) => !ids.has(page.id)),
+        annotations: present.annotations.filter((annotation) => !ids.has(annotation.pageId)),
+      })
+    }
+    case 'movePages': {
+      const ids = new Set(action.ids)
+      const moving = present.pages.filter((page) => ids.has(page.id))
+      const rest = present.pages.filter((page) => !ids.has(page.id))
+      const pages = [...rest.slice(0, action.index), ...moving, ...rest.slice(action.index)]
+      if (pages.every((page, i) => page === present.pages[i])) return history
+      return commit(history, { ...present, pages })
+    }
+    case 'insertPages':
+      return commit(history, {
+        ...present,
+        pages: [...present.pages.slice(0, action.index), ...action.pages, ...present.pages.slice(action.index)],
+      })
     case 'undo': {
       const previous = history.past.at(-1)
       if (!previous) return history

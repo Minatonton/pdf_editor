@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { EMPTY_HISTORY, editorReducer, type EditorAction, type History } from './document'
+import { EMPTY_HISTORY, editorReducer, type EditorAction, type History, type PageRef } from './document'
 import type { ImageAnnotation, RectAnnotation, TextAnnotation } from '../annotations/types'
 
 const text: TextAnnotation = { id: 't', kind: 'text', pageId: 'p1', x: 10, y: 20, text: 'こんにちは', fontSize: 16, color: '#111111' }
@@ -90,5 +90,61 @@ describe('元に戻す・やり直す', () => {
       { type: 'undo' },
     )
     expect(history.present.annotations[0]).toMatchObject({ text: 'A', x: 11 })
+  })
+})
+
+describe('ページの整理', () => {
+  const page = (id: string): PageRef => ({ id, file: 0, index: 0, rotation: 0, width: 600, height: 800 })
+  const opened = (...ids: string[]) => editorReducer(EMPTY_HISTORY, { type: 'open', pages: ids.map(page) })
+  const order = (history: History) => history.present.pages.map((p) => p.id)
+
+  it('選んだページを、残りの並びの指定した位置へまとめて移す', () => {
+    const history = editorReducer(opened('a', 'b', 'c', 'd'), { type: 'movePages', ids: ['d', 'b'], index: 0 })
+    expect(order(history)).toEqual(['b', 'd', 'a', 'c'])
+  })
+
+  it('並びが変わらない移動は、元に戻す履歴に残さない', () => {
+    const start = opened('a', 'b')
+    expect(editorReducer(start, { type: 'movePages', ids: ['a'], index: 0 })).toBe(start)
+  })
+
+  it('ページを消すと、そのページに置いたものも消える', () => {
+    const history = [
+      { type: 'add', annotation: { ...text, pageId: 'a' } },
+      { type: 'removePages', ids: ['a'] },
+    ].reduce((h, a) => editorReducer(h, a as EditorAction), opened('a', 'b'))
+    expect(order(history)).toEqual(['b'])
+    expect(history.present.annotations).toEqual([])
+  })
+
+  it('すべてのページは消せない', () => {
+    const start = opened('a', 'b')
+    expect(editorReducer(start, { type: 'removePages', ids: ['a', 'b'] })).toBe(start)
+  })
+
+  it('指定した位置にページを差し込む', () => {
+    const history = editorReducer(opened('a', 'b'), { type: 'insertPages', pages: [page('x')], index: 1 })
+    expect(order(history)).toEqual(['a', 'x', 'b'])
+  })
+
+  it('ページを回すと向きが変わり、置いた画像は紙の同じ場所に留まる', () => {
+    const placed: ImageAnnotation = { ...image, pageId: 'a', x: 0, y: 0, width: 100, height: 50 }
+    const history = [
+      { type: 'add', annotation: placed },
+      { type: 'rotatePages', ids: ['a'], degrees: 90 },
+    ].reduce((h, a) => editorReducer(h, a as EditorAction), opened('a'))
+    expect(history.present.pages[0].rotation).toBe(90)
+    // 左上の角にあった中心 (50, 25) は、右に90度回すと右上の角の (800 - 25, 50) に来る（回したあとの幅は 800）
+    expect(history.present.annotations[0]).toMatchObject({ x: 775 - 50, y: 50 - 25, width: 100, height: 50 })
+  })
+
+  it('左に回したあと右に回すと、置いたものも元の位置に戻る', () => {
+    const history = [
+      { type: 'add', annotation: { ...text, pageId: 'a' } },
+      { type: 'rotatePages', ids: ['a'], degrees: -90 },
+      { type: 'rotatePages', ids: ['a'], degrees: 90 },
+    ].reduce((h, a) => editorReducer(h, a as EditorAction), opened('a'))
+    expect(history.present.pages[0].rotation).toBe(0)
+    expect(history.present.annotations[0]).toMatchObject({ x: text.x, y: text.y })
   })
 })

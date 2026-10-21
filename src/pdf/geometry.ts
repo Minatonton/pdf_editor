@@ -51,6 +51,19 @@ export function viewToPdfPoint(vx: number, vy: number, box: PageBox, rotation: R
   }
 }
 
+export function pdfToViewPoint(px: number, py: number, box: PageBox, rotation: Rotation): { x: number; y: number } {
+  switch (rotation) {
+    case 0:
+      return { x: px - box.left, y: box.top - py }
+    case 90:
+      return { x: py - box.bottom, y: px - box.left }
+    case 180:
+      return { x: box.right - px, y: py - box.bottom }
+    case 270:
+      return { x: box.top - py, y: box.right - px }
+  }
+}
+
 export function placeInPdf(rect: ViewRect, box: PageBox, rotation: Rotation): PdfPlacement {
   // drawImage は画像の左下を基準に反時計回りに回すので、画面上の左下の角を基準点にし、
   // 表示時の時計回りの回転と打ち消し合う角度だけ回す

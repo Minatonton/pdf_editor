@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeRotation, placeInPdf, viewSize, viewToPdfPoint, type PageBox } from './geometry'
+import { normalizeRotation, pdfToViewPoint, placeInPdf, viewSize, viewToPdfPoint, type PageBox } from './geometry'
 
 const A4: PageBox = { left: 0, bottom: 0, right: 595, top: 842 }
 
@@ -45,6 +45,13 @@ describe('viewToPdfPoint', () => {
     const topLeft = viewToPdfPoint(0, 0, A4, rotation)
     const bottomRight = viewToPdfPoint(width, height, A4, rotation)
     expect(bottomRight).toEqual({ x: 595 - topLeft.x, y: 842 - topLeft.y })
+  })
+})
+
+describe('pdfToViewPoint', () => {
+  it.each([0, 90, 180, 270] as const)('%i度回転でも、画面の座標に戻すと元の点になる', (rotation) => {
+    const pdf = viewToPdfPoint(120, 340, A4, rotation)
+    expect(pdfToViewPoint(pdf.x, pdf.y, A4, rotation)).toEqual({ x: 120, y: 340 })
   })
 })
 
