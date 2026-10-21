@@ -17,6 +17,7 @@ import { SignatureDialog, type SignatureKind } from './components/SignatureDialo
 import { Icon } from './components/Icon'
 import { PageNavigator } from './components/PageNavigator'
 import { QuickTools } from './components/QuickTools'
+import { ToolContextBar } from './components/ToolContextBar'
 import { ToolsPanel } from './components/ToolsPanel'
 import { entryIdOf, type ToolEntry } from './editor/toolCatalog'
 import { MARK_COLORS, type Tool } from './editor/tools'
@@ -585,7 +586,7 @@ export default function App() {
         {pdf && <ToolsPanel tool={tool} onRun={runEntry} />}
         <div className="document-area">
         {pdf && <QuickTools tool={tool} onRun={runEntry} />}
-        {placingHint && <div className="placing-hint">{placingHint}（Esc でやめる）</div>}
+        {placingHint && <ToolContextBar tool={tool} hint={placingHint} onDone={() => setTool({ kind: 'select' })} />}
         <main className="pages" ref={pagesArea} onScroll={trackCurrentPage}>
           {pdf ? (
             pages.map((ref, pageIndex) => (
@@ -623,10 +624,18 @@ export default function App() {
             ))
           ) : (
             <div className="empty">
-              <p>PDF をここにドロップするか、選んで開く</p>
-              <button className="primary" onClick={chooseOpenPdf} disabled={busy}>
-                PDF を開く
-              </button>
+              <span className="empty-mark" aria-hidden>
+                <Icon name="pages" size={40} />
+              </span>
+              <h2>PDF を編集する</h2>
+              <p>文字の書き換え、コメント、署名、ページの整理、墨消しまで、ここでできる</p>
+              <div className="drop-zone">
+                <p>ここに PDF をドロップ</p>
+                <span className="note">または</span>
+                <button className="primary" onClick={chooseOpenPdf} disabled={busy}>
+                  ファイルを選択
+                </button>
+              </div>
               <p className="note">ファイルはブラウザの中だけで処理され、どこにも送信されない</p>
             </div>
           )}

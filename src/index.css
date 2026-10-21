@@ -161,18 +161,40 @@ button.danger {
 }
 
 /* ページの流れの外に浮かせる。流れの中に置くと、出し入れのたびにページが上下にずれ、クリックした場所と置かれる場所が食い違う */
-.placing-hint {
+.tool-context {
   position: absolute;
   z-index: 10;
-  top: 12px;
+  top: 16px;
   left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100% - 160px);
+  padding: 6px 6px 6px 14px;
+  border-radius: 24px;
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
   transform: translateX(-50%);
-  pointer-events: none;
-  padding: 4px 12px;
-  border-radius: 999px;
-  background: var(--ink);
-  color: var(--surface);
-  font-size: 13px;
+  white-space: nowrap;
+}
+
+.tool-context-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.tool-context-hint {
+  overflow: hidden;
+  color: var(--sub);
+  text-overflow: ellipsis;
+}
+
+button.primary.small {
+  height: 28px;
+  padding: 0 14px;
 }
 
 .empty {
@@ -180,15 +202,45 @@ button.danger {
   flex-direction: column;
   align-items: center;
   gap: 12px;
+  width: min(560px, 100%);
   margin: auto;
-  padding: 48px 64px;
-  border: 2px dashed var(--line);
+  padding: 40px 48px;
   border-radius: var(--radius-md);
   background: var(--surface);
+  box-shadow: var(--shadow-float);
+  text-align: center;
+}
+
+.empty h2 {
+  margin: 0;
+  font-size: 22px;
 }
 
 .empty p {
   margin: 0;
+}
+
+.empty-mark {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 16px;
+  background: #d7373f;
+  color: #fff;
+}
+
+.drop-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 8px;
+  padding: 28px;
+  border: 2px dashed var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-app);
 }
 
 .note {
