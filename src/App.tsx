@@ -15,6 +15,7 @@ import { PageView } from './components/PageView'
 import { PageMarksDialog } from './components/PageMarksDialog'
 import { SignatureDialog, type SignatureKind } from './components/SignatureDialog'
 import { Icon } from './components/Icon'
+import { QuickTools } from './components/QuickTools'
 import { ToolsPanel } from './components/ToolsPanel'
 import { entryIdOf, type ToolEntry } from './editor/toolCatalog'
 import { MARK_COLORS, type Tool } from './editor/tools'
@@ -583,6 +584,7 @@ export default function App() {
       <div className="workspace">
         {pdf && <ToolsPanel tool={tool} onRun={runEntry} />}
         <div className="document-area">
+        {pdf && <QuickTools tool={tool} onRun={runEntry} />}
         {placingHint && <div className="placing-hint">{placingHint}（Esc でやめる）</div>}
         <main className="pages" ref={pagesArea}>
           {pdf ? (

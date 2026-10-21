@@ -863,3 +863,17 @@ input.form-field[type='radio'] {
 .tool-entry[aria-pressed='true'] .icon-svg {
   color: var(--accent);
 }
+
+.quick-tools {
+  position: absolute;
+  z-index: 10;
+  top: 16px;
+  left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
+}
