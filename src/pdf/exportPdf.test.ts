@@ -21,7 +21,7 @@ async function pagesOf(bytes: Uint8Array) {
 describe('exportPdf', () => {
   it('並べ替えた順番と、変えた向きで保存する', async () => {
     const file = await pdfWithPages([100, 100], [200, 100], [300, 100])
-    const saved = await exportPdf([file], { pages: [ref(0, 2), ref(0, 0, 90)], annotations: [] })
+    const saved = await exportPdf([file], { pages: [ref(0, 2), ref(0, 0, 90)], annotations: [], formValues: {} })
     expect(await pagesOf(saved)).toEqual([
       { width: 300, rotation: 0 },
       { width: 100, rotation: 90 },
@@ -31,14 +31,14 @@ describe('exportPdf', () => {
   it('別のファイルのページを後ろに足せる', async () => {
     const first = await pdfWithPages([100, 100])
     const second = await pdfWithPages([400, 100])
-    const saved = await exportPdf([first, second], { pages: [ref(0, 0), ref(1, 0)], annotations: [] })
+    const saved = await exportPdf([first, second], { pages: [ref(0, 0), ref(1, 0)], annotations: [], formValues: {} })
     expect((await pagesOf(saved)).map((page) => page.width)).toEqual([100, 400])
   })
 
   it('白紙のページを、指定した大きさと向きで差し込める', async () => {
     const file = await pdfWithPages([100, 100])
     const blank: PageRef = { id: 'blank', file: -1, index: 0, rotation: 90, width: 250, height: 100 }
-    const saved = await exportPdf([file], { pages: [ref(0, 0), blank], annotations: [] })
+    const saved = await exportPdf([file], { pages: [ref(0, 0), blank], annotations: [], formValues: {} })
     expect(await pagesOf(saved)).toEqual([
       { width: 100, rotation: 0 },
       { width: 250, rotation: 90 },
@@ -47,7 +47,7 @@ describe('exportPdf', () => {
 
   it('同じページを2回使っても、別々のページとして保存する', async () => {
     const file = await pdfWithPages([100, 100])
-    const saved = await exportPdf([file], { pages: [ref(0, 0), { ...ref(0, 0), id: 'copy' }], annotations: [] })
+    const saved = await exportPdf([file], { pages: [ref(0, 0), { ...ref(0, 0), id: 'copy' }], annotations: [], formValues: {} })
     expect(await pagesOf(saved)).toHaveLength(2)
   })
 
@@ -55,7 +55,7 @@ describe('exportPdf', () => {
     const pdf = await PDFDocument.create()
     pdf.addPage([100, 100])
     pdf.addPage([100, 100]).node.set(PDFName.of('Secret'), PDFString.of('DELETED-PAGE-MARKER'))
-    const saved = await exportPdf([await pdf.save()], { pages: [ref(0, 0)], annotations: [] })
+    const saved = await exportPdf([await pdf.save()], { pages: [ref(0, 0)], annotations: [], formValues: {} })
 
     const objects = (await PDFDocument.load(saved)).context.enumerateIndirectObjects()
     expect(objects.some(([, object]) => object.toString().includes('DELETED-PAGE-MARKER'))).toBe(false)
@@ -65,7 +65,7 @@ describe('exportPdf', () => {
     const pdf = await PDFDocument.create()
     pdf.addPage([100, 100])
     pdf.catalog.set(PDFName.of('Outlines'), pdf.context.obj({ Type: 'Outlines' }))
-    const saved = await exportPdf([await pdf.save()], { pages: [ref(0, 0, 90)], annotations: [] })
+    const saved = await exportPdf([await pdf.save()], { pages: [ref(0, 0, 90)], annotations: [], formValues: {} })
     expect((await PDFDocument.load(saved)).catalog.has(PDFName.of('Outlines'))).toBe(true)
   })
 
@@ -87,7 +87,7 @@ describe('exportPdf', () => {
     const file = await fileWithSecretPage((pdf, secret) =>
       pdf.context.obj({ Type: 'Annot', Subtype: 'Link', Rect: [0, 0, 10, 10], Dest: [secret, PDFName.of('Fit')] }),
     )
-    const saved = await exportPdf([file], { pages: [ref(0, 0)], annotations: [] })
+    const saved = await exportPdf([file], { pages: [ref(0, 0)], annotations: [], formValues: {} })
     expect(await containsMarker(saved)).toBe(false)
   })
 
@@ -97,7 +97,7 @@ describe('exportPdf', () => {
       const field = pdf.context.register(pdf.context.obj({ T: PDFString.of('name'), Kids: [otherWidget] }))
       return pdf.context.obj({ Type: 'Annot', Subtype: 'Widget', Rect: [0, 0, 10, 10], Parent: field })
     })
-    const saved = await exportPdf([file], { pages: [ref(0, 0)], annotations: [] })
+    const saved = await exportPdf([file], { pages: [ref(0, 0)], annotations: [], formValues: {} })
     expect(await containsMarker(saved)).toBe(false)
   })
 
@@ -108,7 +108,7 @@ describe('exportPdf', () => {
       )
       return pdf.context.obj({ Type: 'Annot', Subtype: 'Text', Rect: [0, 0, 10, 10], IRT: original })
     })
-    const saved = await exportPdf([file], { pages: [ref(0, 0)], annotations: [] })
+    const saved = await exportPdf([file], { pages: [ref(0, 0)], annotations: [], formValues: {} })
     expect(await containsMarker(saved)).toBe(false)
   })
 
@@ -117,7 +117,7 @@ describe('exportPdf', () => {
       const next = pdf.context.obj({ S: 'GoTo', D: [secret, PDFName.of('Fit')] })
       return pdf.context.obj({ Type: 'Annot', Subtype: 'Link', Rect: [0, 0, 10, 10], A: { S: 'URI', URI: PDFString.of('https://example.com'), Next: next } })
     })
-    const saved = await exportPdf([file], { pages: [ref(0, 0)], annotations: [] })
+    const saved = await exportPdf([file], { pages: [ref(0, 0)], annotations: [], formValues: {} })
     expect(await containsMarker(saved)).toBe(false)
   })
 
@@ -126,7 +126,7 @@ describe('exportPdf', () => {
     const other = await fileWithSecretPage((pdf, secret) =>
       pdf.context.obj({ Type: 'Annot', Subtype: 'Link', Rect: [0, 0, 10, 10], AA: { O: { S: 'GoTo', D: [secret, PDFName.of('Fit')] } } }),
     )
-    const saved = await exportPdf([base, other], { pages: [ref(0, 0), ref(1, 0)], annotations: [] })
+    const saved = await exportPdf([base, other], { pages: [ref(0, 0), ref(1, 0)], annotations: [], formValues: {} })
     expect(await containsMarker(saved)).toBe(false)
   })
 
@@ -143,7 +143,7 @@ describe('exportPdf', () => {
     const pointer = pdf.context.obj({ Type: 'Annot', Subtype: 'Square', Rect: [0, 0, 10, 10], Related: secretNote, AP: { N: secretContents } })
     kept.node.set(PDFName.of('Annots'), pdf.context.obj([pdf.context.register(pointer)]))
 
-    const saved = await exportPdf([await pdf.save({ useObjectStreams: false })], { pages: [ref(0, 0)], annotations: [] })
+    const saved = await exportPdf([await pdf.save({ useObjectStreams: false })], { pages: [ref(0, 0)], annotations: [], formValues: {} })
     expect(await containsMarker(saved)).toBe(false)
   })
 
@@ -157,7 +157,7 @@ describe('exportPdf', () => {
     const pointer = pdf.context.obj({ Type: 'Annot', Subtype: 'Square', Rect: [0, 0, 10, 10], AP: { N: appearance } })
     kept.node.set(PDFName.of('Annots'), pdf.context.obj([pdf.context.register(pointer)]))
 
-    const saved = await exportPdf([await pdf.save({ useObjectStreams: false })], { pages: [ref(0, 0)], annotations: [] })
+    const saved = await exportPdf([await pdf.save({ useObjectStreams: false })], { pages: [ref(0, 0)], annotations: [], formValues: {} })
     expect(await containsMarker(saved)).toBe(false)
   })
 
@@ -171,7 +171,7 @@ describe('exportPdf', () => {
     tree.set(PDFName.of('Resources'), pdf.context.obj({ XObject: { Leak: secretContents } }))
     for (const page of pdf.getPages()) page.node.delete(PDFName.of('Resources'))
 
-    const saved = await exportPdf([await pdf.save({ useObjectStreams: false })], { pages: [ref(0, 0)], annotations: [] })
+    const saved = await exportPdf([await pdf.save({ useObjectStreams: false })], { pages: [ref(0, 0)], annotations: [], formValues: {} })
     expect(await containsMarker(saved)).toBe(false)
   })
 
@@ -195,7 +195,7 @@ describe('exportPdf', () => {
     const pdf = await pagesSharingResources('BT /F1 12 Tf ET', (doc) =>
       doc.context.obj({ Font: { F1: doc.context.register(doc.context.obj({ Type: 'Font', BaseFont: 'SHARED-FONT-MARKER' })) } }),
     )
-    const saved = await exportPdf([await pdf.save({ useObjectStreams: false })], { pages: [ref(0, 0)], annotations: [] })
+    const saved = await exportPdf([await pdf.save({ useObjectStreams: false })], { pages: [ref(0, 0)], annotations: [], formValues: {} })
     expect(await objectsContaining(saved, 'SHARED-FONT-MARKER')).toBeGreaterThan(0)
   })
 
@@ -206,7 +206,7 @@ describe('exportPdf', () => {
         XObject: { Secret: doc.context.register(doc.context.stream('DELETED-PAGE-MARKER image', { Type: 'XObject', Subtype: 'Image' })) },
       }),
     )
-    const saved = await exportPdf([await pdf.save({ useObjectStreams: false })], { pages: [ref(0, 0)], annotations: [] })
+    const saved = await exportPdf([await pdf.save({ useObjectStreams: false })], { pages: [ref(0, 0)], annotations: [], formValues: {} })
     expect(await containsMarker(saved)).toBe(false)
   })
 
@@ -219,7 +219,7 @@ describe('exportPdf', () => {
       )
       return doc.context.obj({ XObject: { Fm1: form } })
     })
-    const saved = await exportPdf([await pdf.save({ useObjectStreams: false })], { pages: [ref(0, 0)], annotations: [] })
+    const saved = await exportPdf([await pdf.save({ useObjectStreams: false })], { pages: [ref(0, 0)], annotations: [], formValues: {} })
     expect(await containsMarker(saved)).toBe(false)
     expect(await objectsContaining(saved, 'USED-IMAGE-MARKER')).toBeGreaterThan(0)
   })
@@ -232,7 +232,7 @@ describe('exportPdf', () => {
       )
       return doc.context.obj({ Pattern: { P1: pattern } })
     })
-    const saved = await exportPdf([await pdf.save({ useObjectStreams: false })], { pages: [ref(0, 0)], annotations: [] })
+    const saved = await exportPdf([await pdf.save({ useObjectStreams: false })], { pages: [ref(0, 0)], annotations: [], formValues: {} })
     expect(await containsMarker(saved)).toBe(false)
   })
 
@@ -244,7 +244,7 @@ describe('exportPdf', () => {
       )
       return doc.context.obj({ XObject: { Fm1: form } })
     })
-    const saved = await exportPdf([await pdf.save({ useObjectStreams: false })], { pages: [ref(0, 0)], annotations: [] })
+    const saved = await exportPdf([await pdf.save({ useObjectStreams: false })], { pages: [ref(0, 0)], annotations: [], formValues: {} })
     expect(await containsMarker(saved)).toBe(false)
   })
 
@@ -267,7 +267,7 @@ describe('exportPdf', () => {
 
     it('墨消しのあるページは画像に置き換わり、元の中身はファイルに残らない', async () => {
       const rasterized: unknown[] = []
-      const saved = await exportPdf([await fileWithMarkedPage()], { pages: [page], annotations: [redaction] }, async (target, rects) => {
+      const saved = await exportPdf([await fileWithMarkedPage()], { pages: [page], annotations: [redaction], formValues: {} }, async (target, rects) => {
         rasterized.push({ page: target.id, rects })
         return { bytes: BLACK_PIXEL, format: 'png' }
       })
@@ -279,7 +279,7 @@ describe('exportPdf', () => {
     })
 
     it('画像にする手段がなければ、墨消しのある文書は保存せずにエラーにする', async () => {
-      await expect(exportPdf([await fileWithMarkedPage()], { pages: [page], annotations: [redaction] })).rejects.toThrow()
+      await expect(exportPdf([await fileWithMarkedPage()], { pages: [page], annotations: [redaction], formValues: {} })).rejects.toThrow()
     })
   })
 })

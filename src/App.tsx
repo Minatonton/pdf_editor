@@ -345,7 +345,7 @@ export default function App() {
     void run(async () => {
       const bytes = await exportPdf(
         files.map((file) => file.bytes),
-        { pages: pages.filter((page) => ids.has(page.id)), annotations },
+        { ...history.present, pages: pages.filter((page) => ids.has(page.id)) },
         rasterizerFor(proxyOf),
       )
       downloadPdf(bytes, `${pdf.name.replace(/\.pdf$/i, '')}_${ids.size}pages.pdf`)

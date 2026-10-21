@@ -17,17 +17,26 @@ export interface PageRef {
 /** 白紙のページは元になるファイルを持たないので、ファイル番号の代わりにこれを入れる */
 export const BLANK_PAGE_FILE = -1
 
+/** PDF のフォームの欄に入れた値。チェックボックスは on/off、ラジオボタンと選択肢は選んだ値の名前 */
+export type FieldValue = string | boolean
+
 export interface EditorDocument {
   pages: PageRef[]
   annotations: Annotation[]
+  /** 欄の名前は同じ文書の中でしか一意でないので、ファイル番号と組にした fieldKey で引く */
+  formValues: Record<string, FieldValue>
+}
+
+export function fieldKey(file: number, name: string): string {
+  return `${file}:${name}`
 }
 
 export interface History {
   past: EditorDocument[]
   present: EditorDocument
   future: EditorDocument[]
-  /** 直前の操作が文字の編集だったときの対象。続けて同じものを編集したら1回の操作にまとめる */
-  editingTextId?: string
+  /** 直前の操作が文字や欄への入力だったときの対象。続けて同じものに入力したら1回の操作にまとめる */
+  typingTarget?: string
 }
 
 export type EditorAction =
@@ -41,6 +50,7 @@ export type EditorAction =
   | { type: 'editShape'; id: string; changes: Partial<ShapeStyle> }
   | { type: 'editText'; id: string; changes: Partial<Pick<TextAnnotation, 'text' | 'fontSize' | 'color'>> }
   | { type: 'remove'; id: string }
+  | { type: 'setField'; key: string; value: FieldValue }
   | { type: 'rotatePages'; ids: string[]; degrees: 90 | -90 }
   | { type: 'removePages'; ids: string[] }
   /** ids のページを、残りのページの並びで index の位置に移す（ids の順番は今の並び順を保つ） */
@@ -49,7 +59,7 @@ export type EditorAction =
   | { type: 'undo' }
   | { type: 'redo' }
 
-export const EMPTY_HISTORY: History = { past: [], present: { pages: [], annotations: [] }, future: [] }
+export const EMPTY_HISTORY: History = { past: [], present: { pages: [], annotations: [], formValues: {} }, future: [] }
 
 export function viewSizeOf(page: PageRef): { width: number; height: number } {
   const turned = page.rotation === 90 || page.rotation === 270
@@ -76,6 +86,12 @@ function rotateAnnotation(annotation: Annotation, page: PageRef, rotation: Rotat
   return { ...annotation, x: center.x - annotation.width / 2, y: center.y - annotation.height / 2 }
 }
 
+/** 1文字ずつの入力を、同じ対象に続けて打つあいだは1回の操作にまとめる */
+function typed(history: History, target: string, present: EditorDocument): History {
+  if (history.typingTarget === target) return { ...history, present }
+  return { ...commit(history, present), typingTarget: target }
+}
+
 function commit(history: History, present: EditorDocument): History {
   return { past: [...history.past, history.present], present, future: [] }
 }
@@ -92,7 +108,7 @@ export function editorReducer(history: History, action: EditorAction): History {
   const { present } = history
   switch (action.type) {
     case 'open':
-      return { past: [], present: { pages: action.pages, annotations: [] }, future: [] }
+      return { past: [], present: { pages: action.pages, annotations: [], formValues: {} }, future: [] }
     case 'add':
       return commit(history, { ...present, annotations: [...present.annotations, action.annotation] })
     case 'addMany':
@@ -110,9 +126,13 @@ export function editorReducer(history: History, action: EditorAction): History {
     case 'editText': {
       const edit = (a: Annotation) => (a.id === action.id && a.kind === 'text' ? { ...a, ...action.changes } : a)
       const edited = { ...present, annotations: present.annotations.map(edit) }
-      if (history.editingTextId === action.id) return { ...history, present: edited }
-      return { ...commit(history, edited), editingTextId: action.id }
+      return typed(history, action.id, edited)
     }
+    case 'setField':
+      return typed(history, `field:${action.key}`, {
+        ...present,
+        formValues: { ...present.formValues, [action.key]: action.value },
+      })
     case 'remove':
       return commit(history, { ...present, annotations: present.annotations.filter((a) => a.id !== action.id) })
     case 'rotatePages': {
@@ -122,6 +142,7 @@ export function editorReducer(history: History, action: EditorAction): History {
       )
       const pageById = new Map(present.pages.map((page) => [page.id, page]))
       return commit(history, {
+        ...present,
         pages: present.pages.map((page) => (rotated.has(page.id) ? { ...page, rotation: rotated.get(page.id)! } : page)),
         annotations: present.annotations.map((annotation) =>
           rotated.has(annotation.pageId)
@@ -134,6 +155,7 @@ export function editorReducer(history: History, action: EditorAction): History {
       const ids = new Set(action.ids)
       if (present.pages.every((page) => ids.has(page.id))) return history
       return commit(history, {
+        ...present,
         pages: present.pages.filter((page) => !ids.has(page.id)),
         annotations: present.annotations.filter((annotation) => !ids.has(annotation.pageId)),
       })

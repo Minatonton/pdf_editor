@@ -86,6 +86,17 @@ describe('元に戻す・やり直す', () => {
     expect(history.present.annotations[0]).toMatchObject({ text: 'こんにちは', fontSize: 16 })
   })
 
+  it('同じ欄に続けて打った文字は1回で元に戻り、別の欄への入力は別々に戻る', () => {
+    const history = run(
+      { type: 'setField', key: '0:name', value: '山' },
+      { type: 'setField', key: '0:name', value: '山田' },
+      { type: 'setField', key: '0:agree', value: true },
+      { type: 'undo' },
+    )
+    expect(history.present.formValues).toEqual({ '0:name': '山田' })
+    expect(editorReducer(history, { type: 'undo' }).present.formValues).toEqual({})
+  })
+
   it('別の操作を挟んだテキストの編集は、別々に元に戻る', () => {
     const history = run(
       { type: 'add', annotation: text },
