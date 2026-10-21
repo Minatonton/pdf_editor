@@ -1,8 +1,9 @@
 import { BlendMode, degrees, LineCapStyle, PDFDocument, rgb, type PDFImage, type PDFPage } from 'pdf-lib'
 import { shapePath } from '../annotations/shapePath'
 import { rasterizeText } from '../annotations/textRaster'
-import { BLANK_PAGE_FILE, viewSizeOf, type EditorDocument, type PageRef } from '../editor/document'
+import { BLANK_PAGE_FILE, fieldKey, viewSizeOf, type EditorDocument, type FieldValue, type PageRef } from '../editor/document'
 import { placeInPdf, viewToPdfPoint, type PageBox, type ViewRect } from './geometry'
+import { fillForm } from './fillForm'
 import { removeUnreachableObjects, severDroppedPages } from './prune'
 
 /**
@@ -17,7 +18,16 @@ async function arrangePages(
   files: Uint8Array[],
   pages: PageRef[],
   rasterIds: Set<string>,
+  formValues: Record<string, FieldValue>,
 ): Promise<{ pdf: PDFDocument; output: PDFPage[] }> {
+  const valuesOf = (file: number) => {
+    const prefix = fieldKey(file, '')
+    return Object.fromEntries(
+      Object.entries(formValues)
+        .filter(([key]) => key.startsWith(prefix))
+        .map(([key, value]) => [key.slice(prefix.length), value]),
+    )
+  }
   const first = await PDFDocument.load(files[0])
   // 画像に置き換えるページは、元のページを使わないページとして扱う。元のページの中身を一切持ち込まないため
   const usedRefs = pages.filter((ref) => !rasterIds.has(ref.id))
@@ -25,6 +35,7 @@ async function arrangePages(
     .getPageIndices()
     .every((index) => usedRefs.some((ref) => ref.file === 0 && ref.index === index))
   const pdf = usesEveryPageOfFirst ? first : await PDFDocument.create()
+  if (usesEveryPageOfFirst) await fillForm(first, valuesOf(0), false)
   const reused = new Set<number>()
   const output: PDFPage[] = []
 
@@ -34,6 +45,8 @@ async function arrangePages(
     let source = sources.get(file)
     if (!source) {
       source = file === 0 ? first : await PDFDocument.load(files[file])
+      // 写した先には文書全体のフォームが引き継がれないので、写す前に欄をページの描画に焼き込む
+      await fillForm(source, valuesOf(file), true)
       severDroppedPages(source, new Set(usedRefs.filter((ref) => ref.file === file).map((ref) => ref.index)))
       sources.set(file, source)
     }
@@ -75,7 +88,7 @@ export async function exportPdf(
   }
   if (redactionsByPage.size > 0 && !rasterize) throw new Error('墨消しのあるページを画像にする手段がありません')
 
-  const { pdf, output } = await arrangePages(files, document.pages, new Set(redactionsByPage.keys()))
+  const { pdf, output } = await arrangePages(files, document.pages, new Set(redactionsByPage.keys()), document.formValues)
   const pageById = new Map(document.pages.map((ref, i) => [ref.id, { ref, page: output[i] }]))
   // 同じ画像を何か所に置いても、ファイルには1回だけ埋め込む
   const embeddedImages = new Map<Uint8Array, PDFImage>()

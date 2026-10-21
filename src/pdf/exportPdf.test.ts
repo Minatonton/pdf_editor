@@ -248,6 +248,37 @@ describe('exportPdf', () => {
     expect(await containsMarker(saved)).toBe(false)
   })
 
+  describe('フォームの欄', () => {
+    async function formPdf() {
+      const pdf = await PDFDocument.create()
+      const page = pdf.addPage([300, 300])
+      pdf.addPage([300, 300])
+      const form = pdf.getForm()
+      form.createTextField('name').addToPage(page, { x: 10, y: 250, width: 150, height: 20 })
+      form.createCheckBox('agree').addToPage(page, { x: 10, y: 220, width: 12, height: 12 })
+      const plan = form.createRadioGroup('plan')
+      plan.addOptionToPage('basic', page, { x: 10, y: 190, width: 12, height: 12 })
+      plan.addOptionToPage('pro', page, { x: 40, y: 190, width: 12, height: 12 })
+      return pdf.save()
+    }
+    const values = { '0:name': 'Taro Yamada', '0:agree': true, '0:plan': 'pro' }
+
+    it('入力した値を欄に書き込み、保存したあとも入力し直せる欄のまま残す', async () => {
+      const saved = await exportPdf([await formPdf()], { pages: [ref(0, 0), ref(0, 1)], annotations: [], formValues: values })
+      const form = (await PDFDocument.load(saved)).getForm()
+      expect(form.getTextField('name').getText()).toBe('Taro Yamada')
+      expect(form.getCheckBox('agree').isChecked()).toBe(true)
+      expect(form.getRadioGroup('plan').getSelected()).toBe('pro')
+    })
+
+    it('ページを抜き出すときは、欄をページに焼き込んで値が見えるようにする', async () => {
+      const saved = await exportPdf([await formPdf()], { pages: [ref(0, 0)], annotations: [], formValues: values })
+      const loaded = await PDFDocument.load(saved)
+      expect(loaded.getForm().getFields()).toHaveLength(0)
+      expect(loaded.getPage(0).node.Resources()?.get(PDFName.of('XObject'))).toBeDefined()
+    })
+  })
+
   describe('墨消し', () => {
     // 1×1 の黒い PNG
     const BLACK_PIXEL = Uint8Array.from(
