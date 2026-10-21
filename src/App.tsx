@@ -6,14 +6,14 @@ import {
   DEFAULT_SHAPE_STYLE,
   DEFAULT_TEXT_STYLE,
   RECT_PRESETS,
-  type RectStyle,
   type ShapeStyle,
-  type ShapeVariant,
   type TextStyle,
 } from './annotations/types'
 import { PagePanel } from './components/PagePanel'
 import { PageView } from './components/PageView'
 import { SignatureDialog, type SignatureKind } from './components/SignatureDialog'
+import { ToolBar } from './components/ToolBar'
+import { MARK_COLORS, type Tool } from './editor/tools'
 import { EMPTY_HISTORY, editorReducer, viewSizeOf, type EditorAction, type PageRef } from './editor/document'
 import { exportPdf } from './pdf/exportPdf'
 import { boundsOf, type Point } from './pdf/geometry'
@@ -21,35 +21,11 @@ import { openPdf, pageRefsOf, type OpenedPdf } from './pdf/loadPdf'
 import { rasterizerFor } from './pdf/rasterize'
 import type { TextRun } from './pdf/textRuns'
 
-type Tool =
-  | { kind: 'select' }
-  | { kind: 'text' }
-  | { kind: 'editText' }
-  | { kind: 'markText'; mark: TextMark }
-  | { kind: 'stamp'; text: string }
-  /** width を指定しないときは、画像の画素数から大きさを決める */
-  | { kind: 'image'; image: LoadedImage; width?: number }
-  | { kind: 'rect'; style: RectStyle }
-  | { kind: 'redaction' }
-  | { kind: 'shape'; variant: ShapeVariant }
-
 const ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2]
 /** 画像の画素を、画面と同じ 96dpi とみなしてポイントに直す */
 const POINTS_PER_PIXEL = 72 / 96
 const SIGNATURE_WIDTH = 150
 const SEAL_WIDTH = 42
-
-type TextMark = 'highlight' | 'underline' | 'strike'
-
-/** Acrobat の既定に近い色。ハイライトは黄色、下線は青、取り消し線は赤 */
-const MARK_COLORS: Record<Exclude<TextMark, 'highlight'>, string> = { underline: '#2f6fd0', strike: '#d6403f' }
-
-/** フォームになっていない書類に記入するときによく使う記号と、今日の日付 */
-function stampTexts(): string[] {
-  const today = new Date()
-  const date = `${today.getFullYear()}/${today.getMonth() + 1}/${today.getDate()}`
-  return ['✓', '✗', '○', date]
-}
 
 function isEditingField(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
@@ -414,98 +390,8 @@ export default function App() {
       <header className="toolbar">
         <h1>PDF Editor</h1>
         <button onClick={chooseOpenPdf}>PDF を開く</button>
-        <span className="divider" />
-        <button
-          disabled={!pdf}
-          aria-pressed={tool.kind === 'editText'}
-          onClick={() => setTool(tool.kind === 'editText' ? { kind: 'select' } : { kind: 'editText' })}
-          title="元の PDF の文字の行を選んで書き換える。元の行は白塗りで隠し、同じ位置に打ち直す"
-        >
-          文字を編集
-        </button>
-        <select
-          disabled={!pdf}
-          value={tool.kind === 'markText' ? tool.mark : ''}
-          onChange={(event) =>
-            setTool(event.target.value ? { kind: 'markText', mark: event.target.value as TextMark } : { kind: 'select' })
-          }
-          aria-label="文字に印を付ける"
-          data-active={tool.kind === 'markText'}
-        >
-          <option value="">文字に印…</option>
-          <option value="highlight">ハイライト</option>
-          <option value="underline">下線</option>
-          <option value="strike">取り消し線</option>
-        </select>
-        <button
-          disabled={!pdf}
-          aria-pressed={tool.kind === 'text'}
-          onClick={() => setTool(tool.kind === 'text' ? { kind: 'select' } : { kind: 'text' })}
-        >
-          テキスト
-        </button>
-        <button disabled={!pdf} aria-pressed={tool.kind === 'image'} onClick={() => imageInput.current?.click()}>
-          画像
-        </button>
-        <button
-          disabled={!pdf}
-          aria-pressed={tool.kind === 'rect'}
-          onClick={() => setTool(tool.kind === 'rect' ? { kind: 'select' } : { kind: 'rect', style: RECT_PRESETS[0].style })}
-          title="白い四角を重ねて見えなくする。下の文字はファイルに残り、コピーや検索で読める"
-        >
-          白塗り
-        </button>
-        <select
-          disabled={!pdf}
-          value={tool.kind === 'stamp' ? tool.text : ''}
-          onChange={(event) => setTool(event.target.value ? { kind: 'stamp', text: event.target.value } : { kind: 'select' })}
-          aria-label="スタンプ"
-          data-active={tool.kind === 'stamp'}
-        >
-          <option value="">スタンプ…</option>
-          {stampTexts().map((text) => (
-            <option key={text} value={text}>
-              {text}
-            </option>
-          ))}
-        </select>
-        <select
-          disabled={!pdf}
-          value={tool.kind === 'shape' && tool.variant !== 'ink' ? tool.variant : ''}
-          onChange={(event) =>
-            setTool(event.target.value ? { kind: 'shape', variant: event.target.value as ShapeVariant } : { kind: 'select' })
-          }
-          aria-label="図形"
-          data-active={tool.kind === 'shape' && tool.variant !== 'ink'}
-        >
-          <option value="">図形…</option>
-          <option value="rectangle">□ 四角</option>
-          <option value="ellipse">○ 楕円</option>
-          <option value="line">― 線</option>
-          <option value="arrow">→ 矢印</option>
-        </select>
-        <button
-          disabled={!pdf}
-          aria-pressed={tool.kind === 'shape' && tool.variant === 'ink'}
-          onClick={() =>
-            setTool(tool.kind === 'shape' && tool.variant === 'ink' ? { kind: 'select' } : { kind: 'shape', variant: 'ink' })
-          }
-          title="手書きで書き込む（Esc でやめる）"
-        >
-          ペン
-        </button>
-        <button disabled={!pdf} onClick={() => setSigning(true)} title="手書きの署名、名前の署名、印鑑を作って置く">
-          署名・印鑑
-        </button>
-        <button
-          disabled={!pdf}
-          aria-pressed={tool.kind === 'redaction'}
-          onClick={() => setTool(tool.kind === 'redaction' ? { kind: 'select' } : { kind: 'redaction' })}
-          title="範囲を黒く塗り、保存するときに下の文字や画像をファイルから消す"
-        >
-          墨消し
-        </button>
-        <span className="divider" />
+        {pdf && <span className="file-name">{pdf.name}</span>}
+        <span className="spacer" />
         <button disabled={history.past.length === 0} onClick={() => dispatch({ type: 'undo' })} title="元に戻す（⌘Z）">
           元に戻す
         </button>
@@ -520,8 +406,6 @@ export default function App() {
             </option>
           ))}
         </select>
-        <span className="spacer" />
-        {pdf && <span className="file-name">{pdf.name}</span>}
         <button className="primary" disabled={!pdf || busy} onClick={handleExport}>
           PDF を保存
         </button>
@@ -552,6 +436,15 @@ export default function App() {
           }}
         />
       </header>
+
+      {pdf && (
+        <ToolBar
+          tool={tool}
+          onToolChange={setTool}
+          onChooseImage={() => imageInput.current?.click()}
+          onSign={() => setSigning(true)}
+        />
+      )}
 
       {signing && (
         <SignatureDialog

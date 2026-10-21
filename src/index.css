@@ -567,3 +567,53 @@ button.danger {
   border-color: rgb(47 111 208 / 0.25);
   pointer-events: none;
 }
+
+.toolbar button,
+.toolbar select,
+.tool-bar button,
+.tool-bar select {
+  white-space: nowrap;
+}
+
+.toolbar h1 {
+  white-space: nowrap;
+}
+
+/* 道具は2段目にまとめ、狭い画面では折り返さず横に送る */
+.tool-bar {
+  display: flex;
+  gap: 20px;
+  overflow-x: auto;
+  padding: 6px 16px 8px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.tool-group {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tool-group-label {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.tool-group-items {
+  display: flex;
+  gap: 4px;
+}
+
+.tool-bar button,
+.tool-bar select {
+  height: 30px;
+  font-size: 13px;
+}
+
+.tool-bar select[data-active='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
