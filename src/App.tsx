@@ -1,7 +1,7 @@
 import { useEffect, useReducer, useRef, useState, type DragEvent } from 'react'
 import { loadImageFile, type LoadedImage } from './annotations/imageFile'
+import { TEXT_LINE_HEIGHT } from './annotations/textRaster'
 import { DEFAULT_TEXT_STYLE, type TextStyle } from './annotations/types'
-import { Inspector } from './components/Inspector'
 import { PageView } from './components/PageView'
 import { EMPTY_HISTORY, editorReducer, viewSizeOf, type EditorAction } from './editor/document'
 import { exportPdf } from './pdf/exportPdf'
@@ -31,6 +31,7 @@ export default function App() {
   const [files, setFiles] = useState<OpenedPdf[]>([])
   const [history, dispatchHistory] = useReducer(editorReducer, EMPTY_HISTORY)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [tool, setTool] = useState<Tool>({ kind: 'select' })
   const [textStyle, setTextStyle] = useState<TextStyle>(DEFAULT_TEXT_STYLE)
   const [zoom, setZoom] = useState(1)
@@ -41,7 +42,6 @@ export default function App() {
 
   const { pages, annotations } = history.present
   const pdf = files.at(0)
-  const selected = annotations.find((annotation) => annotation.id === selectedId)
   const hasEdits = history.past.length > 0
 
   // 次に置くテキストは、最後に変えたサイズと色を引き継ぐ
@@ -60,9 +60,29 @@ export default function App() {
     return () => window.removeEventListener('beforeunload', warn)
   }, [hasEdits])
 
+  // 空のまま入力を終えたテキストは、置くのをやめたとみなして消す
+  const endEditing = () => {
+    const edited = annotations.find((annotation) => annotation.id === editingId)
+    if (edited?.kind === 'text' && edited.text.trim() === '') {
+      dispatch({ type: 'remove', id: edited.id })
+      setSelectedId(null)
+    }
+    setEditingId(null)
+  }
+
+  const removeAnnotation = (id: string) => {
+    dispatch({ type: 'remove', id })
+    setSelectedId(null)
+    setEditingId(null)
+  }
+
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        if (editingId) {
+          endEditing()
+          return
+        }
         setTool({ kind: 'select' })
         setSelectedId(null)
         return
@@ -76,8 +96,12 @@ export default function App() {
       if (!selectedId) return
       if (event.key === 'Delete' || event.key === 'Backspace') {
         event.preventDefault()
-        dispatch({ type: 'remove', id: selectedId })
-        setSelectedId(null)
+        removeAnnotation(selectedId)
+        return
+      }
+      if (event.key === 'Enter' && annotations.find((annotation) => annotation.id === selectedId)?.kind === 'text') {
+        event.preventDefault()
+        setEditingId(selectedId)
         return
       }
       const step = event.shiftKey ? 10 : 1
@@ -95,7 +119,7 @@ export default function App() {
     }
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
-  }, [selectedId])
+  })
 
   const run = async (task: () => Promise<void>) => {
     setBusy(true)
@@ -129,7 +153,18 @@ export default function App() {
   const handlePlace = (pageId: string, x: number, y: number) => {
     const id = crypto.randomUUID()
     if (tool.kind === 'text') {
-      dispatch({ type: 'add', annotation: { id, kind: 'text', pageId, x, y, text: 'テキスト', ...textStyle } })
+      dispatch({ type: 'add', annotation: {
+          id,
+          kind: 'text',
+          pageId,
+          // クリックした点が1行目の高さの真ん中に来るようにする。文字の書き出し位置を指す感覚に合わせるため
+          x,
+          y: y - (textStyle.fontSize * TEXT_LINE_HEIGHT) / 2,
+          text: '',
+          ...textStyle,
+        },
+      })
+      setEditingId(id)
     } else if (tool.kind === 'image') {
       const page = pages.find((ref) => ref.id === pageId)!
       const pageWidth = viewSizeOf(page).width
@@ -245,8 +280,8 @@ export default function App() {
       )}
 
       <div className="workspace">
+        {placingHint && <div className="placing-hint">{placingHint}（Esc でやめる）</div>}
         <main className="pages">
-          {placingHint && <div className="placing-hint">{placingHint}（Esc でやめる）</div>}
           {pdf ? (
             pages.map((ref, pageIndex) => (
               <PageView
@@ -257,9 +292,16 @@ export default function App() {
                 scale={zoom}
                 annotations={annotations.filter((annotation) => annotation.pageId === ref.id)}
                 selectedId={selectedId}
+                editingId={editingId}
                 placing={tool.kind !== 'select'}
                 onPlace={handlePlace}
-                onSelect={setSelectedId}
+                onSelect={(id) => {
+                  if (id !== editingId) setEditingId(null)
+                  setSelectedId(id)
+                }}
+                onEdit={setEditingId}
+                onEditEnd={endEditing}
+                onRemove={removeAnnotation}
                 dispatch={dispatch}
               />
             ))
@@ -273,7 +315,6 @@ export default function App() {
             </div>
           )}
         </main>
-        {pdf && <Inspector annotation={selected} dispatch={dispatch} />}
       </div>
     </div>
   )

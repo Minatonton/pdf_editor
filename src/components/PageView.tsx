@@ -3,6 +3,7 @@ import { useEffect, useRef, type MouseEvent } from 'react'
 import { viewSizeOf, type EditorAction, type PageRef } from '../editor/document'
 import type { Annotation } from '../annotations/types'
 import { AnnotationBox } from './AnnotationBox'
+import { SelectionToolbar } from './SelectionToolbar'
 
 export function PageView({
   page,
@@ -11,9 +12,13 @@ export function PageView({
   scale,
   annotations,
   selectedId,
+  editingId,
   placing,
   onPlace,
   onSelect,
+  onEdit,
+  onEditEnd,
+  onRemove,
   dispatch,
 }: {
   page: PageRef
@@ -22,13 +27,18 @@ export function PageView({
   scale: number
   annotations: Annotation[]
   selectedId: string | null
+  editingId: string | null
   placing: boolean
   onPlace: (pageId: string, x: number, y: number) => void
   onSelect: (id: string | null) => void
+  onEdit: (id: string) => void
+  onEditEnd: () => void
+  onRemove: (id: string) => void
   dispatch: (action: EditorAction) => void
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const size = viewSizeOf(page)
+  const selected = annotations.find((annotation) => annotation.id === selectedId)
 
   useEffect(() => {
     const canvas = canvasRef.current!
@@ -65,11 +75,17 @@ export function PageView({
             annotation={annotation}
             scale={scale}
             selected={annotation.id === selectedId}
+            editing={annotation.id === editingId}
             interactive={!placing}
             onSelect={onSelect}
+            onEdit={onEdit}
+            onEditEnd={onEditEnd}
             dispatch={dispatch}
           />
         ))}
+        {selected && !placing && (
+          <SelectionToolbar annotation={selected} scale={scale} onRemove={() => onRemove(selected.id)} dispatch={dispatch} />
+        )}
       </div>
       <span className="page-number">
         {pageNumber}

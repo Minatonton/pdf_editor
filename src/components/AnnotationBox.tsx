@@ -1,4 +1,4 @@
-import { useState, type PointerEvent } from 'react'
+import { useRef, useState, type PointerEvent } from 'react'
 import type { EditorAction } from '../editor/document'
 import { mimeTypeOf } from '../annotations/imageFile'
 import { TEXT_FONT_FAMILY, TEXT_LINE_HEIGHT } from '../annotations/textRaster'
@@ -8,6 +8,8 @@ interface Drag {
   mode: 'move' | 'resize'
   startX: number
   startY: number
+  /** 文字の大きさを変えるときの基準。ドラッグを始めたときの見た目の幅 */
+  startWidth: number
   dx: number
   dy: number
 }
@@ -31,28 +33,36 @@ export function AnnotationBox({
   annotation,
   scale,
   selected,
+  editing,
   interactive,
   onSelect,
+  onEdit,
+  onEditEnd,
   dispatch,
 }: {
   annotation: Annotation
   scale: number
   selected: boolean
+  editing: boolean
   interactive: boolean
   onSelect: (id: string) => void
+  onEdit: (id: string) => void
+  onEditEnd: () => void
   dispatch: (action: EditorAction) => void
 }) {
   // ドラッグ中は位置を手元だけで動かし、離したときに1回だけ履歴に積む。
   // 動かすたびに積むと、元に戻すがドラッグの途中の位置を1つずつたどることになる
   const [drag, setDrag] = useState<Drag | null>(null)
+  const box = useRef<HTMLDivElement>(null)
 
   const begin = (mode: Drag['mode']) => (event: PointerEvent<HTMLElement>) => {
-    if (!interactive || event.button !== 0) return
+    if (!interactive || editing || event.button !== 0) return
     event.stopPropagation()
     event.preventDefault()
     onSelect(annotation.id)
     event.currentTarget.setPointerCapture(event.pointerId)
-    setDrag({ mode, startX: event.clientX, startY: event.clientY, dx: 0, dy: 0 })
+    const startWidth = box.current!.offsetWidth
+    setDrag({ mode, startX: event.clientX, startY: event.clientY, startWidth, dx: 0, dy: 0 })
   }
 
   const handleMove = (event: PointerEvent<HTMLElement>) => {
@@ -67,6 +77,9 @@ export function AnnotationBox({
     if (drag.mode === 'move' && (dx !== 0 || dy !== 0)) dispatch({ type: 'move', id: annotation.id, dx, dy })
     if (drag.mode === 'resize' && annotation.kind === 'image' && dx !== 0) {
       dispatch({ type: 'resizeImage', id: annotation.id, width: annotation.width + dx })
+    }
+    if (drag.mode === 'resize' && annotation.kind === 'text' && dx !== 0) {
+      dispatch({ type: 'editText', id: annotation.id, changes: { fontSize: resizedFontSize(annotation.fontSize, drag) } })
     }
     setDrag(null)
   }
@@ -84,6 +97,7 @@ export function AnnotationBox({
     const height = (annotation.height * width) / annotation.width
     return (
       <div
+        ref={box}
         className="annotation image"
         data-selected={selected}
         style={{ ...style, width: width * scale, height: height * scale }}
@@ -98,14 +112,17 @@ export function AnnotationBox({
     )
   }
 
+  const fontSize = drag?.mode === 'resize' ? resizedFontSize(annotation.fontSize, drag) : annotation.fontSize
   return (
     <div
+      ref={box}
       className="annotation text"
       data-selected={selected}
+      data-editing={editing}
       style={{
         ...style,
         fontFamily: TEXT_FONT_FAMILY,
-        fontSize: annotation.fontSize * scale,
+        fontSize: fontSize * scale,
         lineHeight: TEXT_LINE_HEIGHT,
         color: annotation.color,
       }}
@@ -113,8 +130,35 @@ export function AnnotationBox({
       onPointerMove={handleMove}
       onPointerUp={handleEnd}
       onPointerCancel={handleEnd}
+      onDoubleClick={() => onEdit(annotation.id)}
     >
-      {annotation.text || ' '}
+      {editing ? (
+        <textarea
+          autoFocus
+          value={annotation.text}
+          placeholder="テキストを入力"
+          rows={1}
+          onFocus={(event) => {
+            const end = event.currentTarget.value.length
+            event.currentTarget.setSelectionRange(end, end)
+          }}
+          onChange={(event) => dispatch({ type: 'editText', id: annotation.id, changes: { text: event.target.value } })}
+          onBlur={onEditEnd}
+        />
+      ) : (
+        annotation.text || '\u00a0'
+      )}
+      {selected && !editing && (
+        <span className="resize-handle" onPointerDown={begin('resize')} aria-label="文字の大きさを変える" />
+      )}
     </div>
   )
+}
+
+const MIN_FONT_SIZE = 4
+
+/** 角を引いて広げた幅の割合だけ、文字を大きくする */
+function resizedFontSize(fontSize: number, drag: Drag): number {
+  const ratio = (drag.startWidth + drag.dx) / drag.startWidth
+  return Math.max(MIN_FONT_SIZE, Math.round(fontSize * ratio * 2) / 2)
 }
