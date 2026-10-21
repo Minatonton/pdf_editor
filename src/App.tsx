@@ -14,7 +14,7 @@ import { PageView } from './components/PageView'
 import { SignatureDialog, type SignatureKind } from './components/SignatureDialog'
 import { ToolBar } from './components/ToolBar'
 import { MARK_COLORS, type Tool } from './editor/tools'
-import { EMPTY_HISTORY, editorReducer, viewSizeOf, type EditorAction, type PageRef } from './editor/document'
+import { EMPTY_HISTORY, editorReducer, fieldKey, viewSizeOf, type EditorAction, type PageRef } from './editor/document'
 import { exportPdf } from './pdf/exportPdf'
 import { boundsOf, type Point } from './pdf/geometry'
 import { openPdf, pageRefsOf, type OpenedPdf } from './pdf/loadPdf'
@@ -497,6 +497,8 @@ export default function App() {
                 textMode={tool.kind === 'editText' ? 'pick' : tool.kind === 'markText' ? 'mark' : null}
                 onPickText={handlePickText}
                 onMarkText={handleMarkText}
+                fieldValueOf={(name) => history.present.formValues[fieldKey(ref.file, name)]}
+                onFieldChange={(name, value) => dispatch({ type: 'setField', key: fieldKey(ref.file, name), value })}
                 onSelect={(id) => {
                   if (id !== editingId) setEditingId(null)
                   setSelectedId(id)

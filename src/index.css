@@ -617,3 +617,29 @@ button.danger {
   background: var(--accent-soft);
   color: var(--accent);
 }
+
+/* フォームの欄。紙の上の欄だと分かるよう、Acrobat と同じく薄い青で塗る */
+.form-field {
+  position: absolute;
+  height: auto;
+  margin: 0;
+  padding: 0 2px;
+  border: 1px solid rgb(47 111 208 / 0.35);
+  border-radius: 0;
+  background: rgb(221 232 250 / 0.6);
+  color: #111;
+  font-family: 'Noto Sans JP', sans-serif;
+  line-height: 1.2;
+  resize: none;
+}
+
+.form-field:focus {
+  outline: 2px solid var(--accent);
+  background: rgb(255 255 255 / 0.9);
+}
+
+input.form-field[type='checkbox'],
+input.form-field[type='radio'] {
+  accent-color: var(--accent);
+  cursor: pointer;
+}

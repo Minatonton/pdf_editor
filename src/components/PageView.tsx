@@ -1,12 +1,13 @@
-import type { PDFPageProxy } from 'pdfjs-dist'
+import { AnnotationMode, type PDFPageProxy } from 'pdfjs-dist'
 import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from 'react'
-import { viewSizeOf, type EditorAction, type PageRef } from '../editor/document'
+import { viewSizeOf, type EditorAction, type FieldValue, type PageRef } from '../editor/document'
 import type { Annotation } from '../annotations/types'
 import { boundsOf, type Point } from '../pdf/geometry'
 import { textLinesOf } from '../pdf/pageText'
 import { linesInRect, type TextRun } from '../pdf/textRuns'
 
 import { AnnotationBox } from './AnnotationBox'
+import { FormLayer } from './FormLayer'
 import { SelectionToolbar } from './SelectionToolbar'
 
 export function PageView({
@@ -24,6 +25,8 @@ export function PageView({
   textMode,
   onPickText,
   onMarkText,
+  fieldValueOf,
+  onFieldChange,
   onSelect,
   onEdit,
   onEditEnd,
@@ -47,6 +50,8 @@ export function PageView({
   textMode: 'pick' | 'mark' | null
   onPickText: (pageId: string, line: TextRun) => void
   onMarkText: (pageId: string, lines: TextRun[]) => void
+  fieldValueOf: (name: string) => FieldValue | undefined
+  onFieldChange: (name: string, value: FieldValue) => void
   onSelect: (id: string | null) => void
   onEdit: (id: string) => void
   onEditEnd: () => void
@@ -80,7 +85,13 @@ export function PageView({
     const ratio = window.devicePixelRatio || 1
     canvas.width = Math.floor(viewport.width * ratio)
     canvas.height = Math.floor(viewport.height * ratio)
-    const task = proxy.render({ canvas, viewport, transform: ratio === 1 ? undefined : [ratio, 0, 0, ratio, 0, 0] })
+    const task = proxy.render({
+      canvas,
+      viewport,
+      transform: ratio === 1 ? undefined : [ratio, 0, 0, ratio, 0, 0],
+      // フォームの欄は上に入力欄を重ねるので、元の値の見た目は描かない。描くと入れ直した値と二重に見える
+      annotationMode: AnnotationMode.ENABLE_FORMS,
+    })
     task.promise.catch((error: unknown) => {
       if ((error as Error).name !== 'RenderingCancelledException') console.error(error)
     })
@@ -158,6 +169,16 @@ export function PageView({
               width: drawnRect.width * scale,
               height: drawnRect.height * scale,
             }}
+          />
+        )}
+        {proxy && (
+          <FormLayer
+            proxy={proxy}
+            rotation={page.rotation}
+            scale={scale}
+            valueOf={fieldValueOf}
+            onChange={onFieldChange}
+            interactive={!placing}
           />
         )}
         {textMode &&
