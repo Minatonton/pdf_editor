@@ -3,7 +3,7 @@ import { shapePath } from '../annotations/shapePath'
 import { rasterizeText } from '../annotations/textRaster'
 import { BLANK_PAGE_FILE, type EditorDocument, type PageRef } from '../editor/document'
 import { placeInPdf, viewToPdfPoint, type PageBox, type ViewRect } from './geometry'
-import { detachFromOtherPages, removeUnreachableObjects } from './prune'
+import { removeUnreachableObjects, severDroppedPages } from './prune'
 
 /**
  * 1つ目のファイルのページをすべて使うときは、それを読み込んだものを土台にしてページを並べ直す。
@@ -19,10 +19,20 @@ async function arrangePages(files: Uint8Array[], pages: PageRef[]): Promise<{ pd
     .getPageIndices()
     .every((index) => pages.some((ref) => ref.file === 0 && ref.index === index))
   const pdf = usesEveryPageOfFirst ? first : await PDFDocument.create()
-  const sources = new Map<number, PDFDocument>([[0, first]])
   const reused = new Set<number>()
   const output: PDFPage[] = []
-  const copied: PDFPage[] = []
+
+  // 写す元のファイルは、写す前に使わないページへの参照を断ち切っておく。土台にした文書は全ページを使うので断ち切らない
+  const sources = new Map<number, PDFDocument>(usesEveryPageOfFirst ? [[0, first]] : [])
+  const sourceOf = async (file: number) => {
+    let source = sources.get(file)
+    if (!source) {
+      source = file === 0 ? first : await PDFDocument.load(files[file])
+      severDroppedPages(source, new Set(pages.filter((ref) => ref.file === file).map((ref) => ref.index)))
+      sources.set(file, source)
+    }
+    return source
+  }
 
   for (const ref of pages) {
     let page: PDFPage
@@ -32,13 +42,7 @@ async function arrangePages(files: Uint8Array[], pages: PageRef[]): Promise<{ pd
       page = pdf.getPage(ref.index)
       reused.add(ref.index)
     } else {
-      let source = sources.get(ref.file)
-      if (!source) {
-        source = await PDFDocument.load(files[ref.file])
-        sources.set(ref.file, source)
-      }
-      ;[page] = await pdf.copyPages(source, [ref.index])
-      copied.push(page)
+      ;[page] = await pdf.copyPages(await sourceOf(ref.file), [ref.index])
     }
     page.setRotation(degrees(ref.rotation))
     output.push(page)
@@ -46,8 +50,7 @@ async function arrangePages(files: Uint8Array[], pages: PageRef[]): Promise<{ pd
 
   for (let i = pdf.getPageCount() - 1; i >= 0; i--) pdf.removePage(i)
   for (const page of output) pdf.addPage(page)
-  detachFromOtherPages(copied)
-  removeUnreachableObjects(pdf, output)
+  removeUnreachableObjects(pdf)
   return { pdf, output }
 }
 

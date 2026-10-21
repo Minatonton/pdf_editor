@@ -129,4 +129,21 @@ describe('exportPdf', () => {
     const saved = await exportPdf([base, other], { pages: [ref(0, 0), ref(1, 0)], annotations: [] })
     expect(await containsMarker(saved)).toBe(false)
   })
+
+  it('残したページの注釈が、削除したページの注釈や描画命令を直接指していても、その中身は残らない', async () => {
+    const pdf = await PDFDocument.create()
+    const kept = pdf.addPage([100, 100])
+    const secret = pdf.addPage([100, 100])
+    const secretContents = pdf.context.register(pdf.context.stream('% DELETED-PAGE-MARKER in contents\n'))
+    secret.node.set(PDFName.of('Contents'), secretContents)
+    const secretNote = pdf.context.register(
+      pdf.context.obj({ Type: 'Annot', Subtype: 'Text', Contents: PDFString.of('DELETED-PAGE-MARKER in note') }),
+    )
+    secret.node.set(PDFName.of('Annots'), pdf.context.obj([secretNote]))
+    const pointer = pdf.context.obj({ Type: 'Annot', Subtype: 'Square', Rect: [0, 0, 10, 10], Related: secretNote, AP: { N: secretContents } })
+    kept.node.set(PDFName.of('Annots'), pdf.context.obj([pdf.context.register(pointer)]))
+
+    const saved = await exportPdf([await pdf.save({ useObjectStreams: false })], { pages: [ref(0, 0)], annotations: [] })
+    expect(await containsMarker(saved)).toBe(false)
+  })
 })
