@@ -1,15 +1,15 @@
 import { useRef, useState, type PointerEvent } from 'react'
 import type { EditorAction } from '../editor/document'
 import { mimeTypeOf } from '../annotations/imageFile'
-import { baselineOffset, TEXT_FONT_FAMILY, TEXT_LINE_HEIGHT } from '../annotations/textRaster'
+import { baselineOffset, linesOf, TEXT_FONT_FAMILY, TEXT_LINE_HEIGHT } from '../annotations/textRaster'
 import { angleFrom, snapAngle } from '../editor/rotation'
 import type { ViewRect } from '../pdf/geometry'
 import { resizeBox } from '../annotations/boxSize'
 import { shapePath } from '../annotations/shapePath'
-import { NOTE_ICON_SIZE, type Annotation, type BoxAnnotation, type ImageAnnotation } from '../annotations/types'
+import { NOTE_ICON_SIZE, type Annotation, type BoxAnnotation, type ImageAnnotation, type TextAnnotation } from '../annotations/types'
 
 interface Drag {
-  mode: 'move' | 'resize' | 'rotate'
+  mode: 'move' | 'resize' | 'rotate' | 'width'
   startX: number
   startY: number
   /** 文字の大きさを変えるときの基準。ドラッグを始めたときの見た目の幅 */
@@ -135,6 +135,10 @@ export function AnnotationBox({
       setDrag({ ...drag, angle: angleOf(drag, event) })
       return
     }
+    if (drag.mode === 'width') {
+      setDrag({ ...drag, dx: event.clientX - drag.startX })
+      return
+    }
     const delta = deltaOf(drag, event)
     if (drag.mode === 'move') onGroupDrag?.(delta)
     setDrag({ ...drag, ...delta })
@@ -146,6 +150,14 @@ export function AnnotationBox({
     if (drag.mode === 'rotate') {
       const angle = angleOf(drag, event)
       if (angle !== rotationOf(annotation)) dispatch({ type: 'rotate', id: annotation.id, rotation: angle })
+      setDrag(null)
+      return
+    }
+    if (drag.mode === 'width') {
+      const final = { ...drag, dx: event.clientX - drag.startX }
+      if (final.dx !== 0 && annotation.kind === 'text') {
+        dispatch({ type: 'setTextWidth', id: annotation.id, width: widthOf(annotation, final, scale) })
+      }
       setDrag(null)
       return
     }
@@ -262,6 +274,8 @@ export function AnnotationBox({
   }
 
   const fontSize = drag?.mode === 'resize' ? resizedFontSize(annotation.fontSize, drag) : annotation.fontSize
+  const wrapWidth = drag?.mode === 'width' ? widthOf(annotation, drag, scale) : annotation.width
+  const lines = linesOf({ ...annotation, fontSize, width: wrapWidth })
   return (
     <div
       ref={box}
@@ -275,7 +289,9 @@ export function AnnotationBox({
         fontSize: fontSize * scale,
         lineHeight: TEXT_LINE_HEIGHT,
         color: annotation.color,
+        width: wrapWidth === undefined ? undefined : wrapWidth * scale,
       }}
+      data-wrapped={wrapWidth !== undefined}
       onPointerDown={begin('move')}
       onPointerMove={handleMove}
       onPointerUp={handleEnd}
@@ -296,7 +312,8 @@ export function AnnotationBox({
           onBlur={onEditEnd}
         />
       ) : (
-        annotation.text || '\u00a0'
+        // 折り返しはブラウザに任せず、保存する画像と同じ計算で決めた行をそのまま並べる
+        lines.join('\n') || '\u00a0'
       )}
       {editing && (
         // 入力中は文字の上を押すとカーソルの移動になるので、動かすためのつまみを枠の外に出す。
@@ -310,9 +327,26 @@ export function AnnotationBox({
       {selected && !editing && (
         <span className="resize-handle" onPointerDown={begin('resize')} aria-label="文字の大きさを変える" />
       )}
+      {selected && !editing && (
+        <span
+          className="width-handle"
+          onPointerDown={begin('width')}
+          onDoubleClick={(event) => {
+            event.stopPropagation()
+            dispatch({ type: 'setTextWidth', id: annotation.id, width: undefined })
+          }}
+          title="引っぱって折り返す幅を決める（ダブルクリックで折り返しをやめる）"
+          aria-label="折り返す幅"
+        />
+      )}
       {rotateHandle}
     </div>
   )
+}
+
+/** 右辺を引いたあとの折り返す幅。1文字も入らないほど狭くはしない */
+function widthOf(annotation: TextAnnotation, drag: Drag, scale: number): number {
+  return Math.max(annotation.fontSize * 2, (drag.startWidth + drag.dx) / scale)
 }
 
 function rotationOf(annotation: Annotation): number {

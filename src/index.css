@@ -1159,3 +1159,25 @@ input.form-field[type='radio'] {
 .annotation {
   transform-origin: center;
 }
+
+/* 折り返す幅を決めるつまみ。右辺の中央に縦長に出す */
+.width-handle {
+  position: absolute;
+  top: 50%;
+  right: -5px;
+  width: 6px;
+  height: 18px;
+  margin-top: -9px;
+  border: 1px solid var(--surface);
+  border-radius: 3px;
+  background: var(--accent);
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+/* 幅を決めたテキストは、入力中もその幅で折り返して見せる */
+.annotation.text[data-wrapped='true'] textarea {
+  width: 100%;
+  white-space: pre-wrap;
+  field-sizing: content;
+}

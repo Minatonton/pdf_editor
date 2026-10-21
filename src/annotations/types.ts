@@ -13,6 +13,8 @@ export interface TextAnnotation extends Placed {
   color: string
   /** 中心を軸に時計回りに回した角度（度）。回していなければ持たない */
   rotation?: number
+  /** 折り返す幅（ポイント）。持たなければ折り返さず、打った改行だけで行を分ける */
+  width?: number
 }
 
 export interface ImageAnnotation extends Placed {
