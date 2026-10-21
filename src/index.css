@@ -1103,3 +1103,23 @@ input.form-field[type='radio'] {
 .move-grip:active {
   cursor: grabbing;
 }
+
+/* 吸い寄せた位置を示す線。書類の中の色と見分けやすいよう、マゼンタにする */
+.snap-guide {
+  position: absolute;
+  z-index: 4;
+  background: #e0359b;
+  pointer-events: none;
+}
+
+.snap-guide.x {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+
+.snap-guide.y {
+  right: 0;
+  left: 0;
+  height: 1px;
+}

@@ -1,7 +1,8 @@
 import { useRef, useState, type PointerEvent } from 'react'
 import type { EditorAction } from '../editor/document'
 import { mimeTypeOf } from '../annotations/imageFile'
-import { TEXT_FONT_FAMILY, TEXT_LINE_HEIGHT } from '../annotations/textRaster'
+import { baselineOffset, TEXT_FONT_FAMILY, TEXT_LINE_HEIGHT } from '../annotations/textRaster'
+import type { ViewRect } from '../pdf/geometry'
 import { resizeBox } from '../annotations/boxSize'
 import { shapePath } from '../annotations/shapePath'
 import { NOTE_ICON_SIZE, type Annotation, type BoxAnnotation, type ImageAnnotation } from '../annotations/types'
@@ -12,6 +13,7 @@ interface Drag {
   startY: number
   /** 文字の大きさを変えるときの基準。ドラッグを始めたときの見た目の幅 */
   startWidth: number
+  startHeight: number
   dx: number
   dy: number
 }
@@ -40,6 +42,8 @@ export function AnnotationBox({
   onSelect,
   onEdit,
   onEditEnd,
+  onSnap,
+  onSnapEnd,
   dispatch,
 }: {
   annotation: Annotation
@@ -50,6 +54,9 @@ export function AnnotationBox({
   onSelect: (id: string) => void
   onEdit: (id: string) => void
   onEditEnd: () => void
+  /** 動かした先の箱（と文字の基準線）を渡すと、吸い寄せるためにずらす量を返す。free のときは吸い寄せない */
+  onSnap: (id: string, box: ViewRect, baseline: number | undefined, free: boolean) => { dx: number; dy: number }
+  onSnapEnd: () => void
   dispatch: (action: EditorAction) => void
 }) {
   // ドラッグ中は位置を手元だけで動かし、離したときに1回だけ履歴に積む。
@@ -64,25 +71,47 @@ export function AnnotationBox({
     event.preventDefault()
     onSelect(annotation.id)
     event.currentTarget.setPointerCapture(event.pointerId)
-    const startWidth = box.current!.offsetWidth
-    setDrag({ mode, startX: event.clientX, startY: event.clientY, startWidth, dx: 0, dy: 0 })
+    const { offsetWidth: startWidth, offsetHeight: startHeight } = box.current!
+    setDrag({ mode, startX: event.clientX, startY: event.clientY, startWidth, startHeight, dx: 0, dy: 0 })
+  }
+
+  /** 押した位置からのずれ（画面の画素）。動かすときは吸い寄せた分も足す */
+  const deltaOf = (current: Drag, event: PointerEvent<HTMLElement>) => {
+    let dx = event.clientX - current.startX
+    let dy = event.clientY - current.startY
+    if (current.mode === 'move') {
+      const moved = {
+        x: annotation.x + dx / scale,
+        y: annotation.y + dy / scale,
+        width: current.startWidth / scale,
+        height: current.startHeight / scale,
+      }
+      const baseline = annotation.kind === 'text' ? moved.y + baselineOffset(annotation.fontSize) : undefined
+      const snapped = onSnap(annotation.id, moved, baseline, event.altKey)
+      dx += snapped.dx * scale
+      dy += snapped.dy * scale
+    }
+    return { dx, dy }
   }
 
   const handleMove = (event: PointerEvent<HTMLElement>) => {
     if (!drag) return
-    setDrag({ ...drag, dx: event.clientX - drag.startX, dy: event.clientY - drag.startY })
+    setDrag({ ...drag, ...deltaOf(drag, event) })
   }
 
-  const handleEnd = () => {
+  // 離した位置は、最後の描画を待たずにこのイベントから取る。素早く動かすと描画が追いつかず、ずれて置かれるため
+  const handleEnd = (event: PointerEvent<HTMLElement>) => {
     if (!drag) return
-    const dx = drag.dx / scale
-    const dy = drag.dy / scale
+    const final = { ...drag, ...deltaOf(drag, event) }
+    onSnapEnd()
+    const dx = final.dx / scale
+    const dy = final.dy / scale
     if (drag.mode === 'move' && (dx !== 0 || dy !== 0)) dispatch({ type: 'move', id: annotation.id, dx, dy })
     if (drag.mode === 'resize' && annotation.kind !== 'text' && annotation.kind !== 'note' && (dx !== 0 || dy !== 0)) {
       dispatch({ type: 'resize', id: annotation.id, ...resizedBox(annotation, dx, dy) })
     }
     if (drag.mode === 'resize' && annotation.kind === 'text' && dx !== 0) {
-      dispatch({ type: 'editText', id: annotation.id, changes: { fontSize: resizedFontSize(annotation.fontSize, drag) } })
+      dispatch({ type: 'editText', id: annotation.id, changes: { fontSize: resizedFontSize(annotation.fontSize, final) } })
     }
     setDrag(null)
   }
@@ -100,6 +129,7 @@ export function AnnotationBox({
       <div
         ref={box}
         className="annotation note"
+        data-id={annotation.id}
         data-selected={selected}
         title={annotation.text || '付箋'}
         style={{ ...style, width: NOTE_ICON_SIZE * scale, height: NOTE_ICON_SIZE * scale }}
@@ -131,6 +161,7 @@ export function AnnotationBox({
       <div
         ref={box}
         className={`annotation ${annotation.kind}`}
+        data-id={annotation.id}
         data-selected={selected}
         style={{ ...style, ...fill, width: width * scale, height: height * scale }}
         onPointerDown={begin('move')}
@@ -168,6 +199,7 @@ export function AnnotationBox({
     <div
       ref={box}
       className="annotation text"
+      data-id={annotation.id}
       data-selected={selected}
       data-editing={editing}
       style={{

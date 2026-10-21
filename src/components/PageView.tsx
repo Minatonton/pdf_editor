@@ -3,7 +3,9 @@ import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from 
 import { viewSizeOf, visibleRectOf, type EditorAction, type FieldValue, type PageRef } from '../editor/document'
 import { expandMark, type PageMarks } from '../editor/pageMarks'
 import type { Annotation } from '../annotations/types'
-import { boundsOf, type Point } from '../pdf/geometry'
+import { baselineOffset } from '../annotations/textRaster'
+import { linesOfBox, snap, type Guide, type SnapLines } from '../editor/snap'
+import { boundsOf, type Point, type ViewRect } from '../pdf/geometry'
 import { textLinesOf } from '../pdf/pageText'
 import { linesInRect, type TextRun } from '../pdf/textRuns'
 
@@ -76,10 +78,44 @@ export function PageView({
   const [drawing, setDrawing] = useState<Point[] | null>(null)
   // 描き終えた直後に続けて届く click を、何もない所のクリック（選択の解除）として扱わないための印
   const justDrew = useRef(false)
+  const overlayRef = useRef<HTMLDivElement>(null)
+  const [guides, setGuides] = useState<Guide[]>([])
+
+  const snapTargets = (movingId: string): SnapLines => {
+    const overlay = overlayRef.current!
+    const origin = overlay.getBoundingClientRect()
+    const targets: SnapLines = { xs: [], ys: [] }
+    const add = (lines: SnapLines) => {
+      targets.xs.push(...lines.xs)
+      targets.ys.push(...lines.ys)
+    }
+    for (const element of overlay.querySelectorAll<HTMLElement>('.annotation[data-id]')) {
+      if (element.dataset.id === movingId) continue
+      const r = element.getBoundingClientRect()
+      const box = { x: (r.left - origin.left) / scale, y: (r.top - origin.top) / scale, width: r.width / scale, height: r.height / scale }
+      const other = annotations.find((annotation) => annotation.id === element.dataset.id)
+      add(linesOfBox(box, other?.kind === 'text' ? box.y + baselineOffset(other.fontSize) : undefined))
+    }
+    for (const line of textLines ?? []) add({ xs: [{ at: line.x, kind: 'edge' }], ys: [{ at: line.baseline, kind: 'baseline' }] })
+    add({ xs: [{ at: visible.x + visible.width / 2, kind: 'center' }], ys: [{ at: visible.y + visible.height / 2, kind: 'center' }] })
+    return targets
+  }
+
+  const handleSnap = (id: string, box: ViewRect, baseline: number | undefined, free: boolean) => {
+    if (free) {
+      setGuides([])
+      return { dx: 0, dy: 0 }
+    }
+    // 画面の上で 6px 以内に近づいたら吸い寄せる。拡大していても縮小していても同じ手応えにするため
+    const snapped = snap(linesOfBox(box, baseline), snapTargets(id), 6 / scale)
+    setGuides(snapped.guides)
+    return snapped
+  }
   const [textLines, setTextLines] = useState<TextRun[] | null>(null)
 
   useEffect(() => {
-    if (!textMode || !proxy) return
+    // 元の文字の行は、印を付ける・書き換えるときだけでなく、置いたものを行に吸い寄せるときにも使う
+    if (!proxy) return
     let cancelled = false
     void textLinesOf(proxy, page.rotation).then((lines) => {
       if (!cancelled) setTextLines(lines)
@@ -87,7 +123,7 @@ export function PageView({
     return () => {
       cancelled = true
     }
-  }, [textMode, proxy, page.rotation])
+  }, [proxy, page.rotation])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -168,6 +204,7 @@ export function PageView({
       </div>
       {/* 置いたものは切り取る前のページの座標で持つので、重ねる層もページ全体の大きさにしてずらす */}
       <div
+        ref={overlayRef}
         className="page-overlay"
         data-placing={placing}
         style={{ left: -visible.x * scale, top: -visible.y * scale, width: size.width * scale, height: size.height * scale }}
@@ -253,7 +290,16 @@ export function PageView({
             onSelect={onSelect}
             onEdit={onEdit}
             onEditEnd={onEditEnd}
+            onSnap={handleSnap}
+            onSnapEnd={() => setGuides([])}
             dispatch={dispatch}
+          />
+        ))}
+        {guides.map((guide, i) => (
+          <div
+            key={i}
+            className={`snap-guide ${guide.axis}`}
+            style={guide.axis === 'x' ? { left: guide.at * scale } : { top: guide.at * scale }}
           />
         ))}
         {selected && !drawMode && (
