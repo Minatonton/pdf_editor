@@ -4,12 +4,20 @@ import { BLANK_PAGE_FILE, type EditorDocument, type PageRef } from '../editor/do
 import { placeInPdf, type PageBox, type ViewRect } from './geometry'
 
 /**
- * 1つ目のファイルを読み込んだものを土台にして、ページを並べ直す。
+ * 1つ目のファイルのページをすべて使うときは、それを読み込んだものを土台にしてページを並べ直す。
  * 新しい PDF にページを写すと、しおりやフォームの欄など文書全体に付いた情報が失われるため。
+ *
+ * 1ページでも使わないページがあるときは、新しい PDF に使うページだけを写す。
+ * 土台からページを外しても、そのページの中身はどこからも参照されないままファイルに残り、
+ * 削除や抜き出しで取り除いたつもりの内容を読み出せてしまうため。
  */
 async function arrangePages(files: Uint8Array[], pages: PageRef[]): Promise<{ pdf: PDFDocument; output: PDFPage[] }> {
-  const pdf = await PDFDocument.load(files[0])
-  const sources = new Map<number, PDFDocument>([[0, pdf]])
+  const first = await PDFDocument.load(files[0])
+  const usesEveryPageOfFirst = first
+    .getPageIndices()
+    .every((index) => pages.some((ref) => ref.file === 0 && ref.index === index))
+  const pdf = usesEveryPageOfFirst ? first : await PDFDocument.create()
+  const sources = new Map<number, PDFDocument>([[0, first]])
   const reused = new Set<number>()
   const output: PDFPage[] = []
 
@@ -17,7 +25,7 @@ async function arrangePages(files: Uint8Array[], pages: PageRef[]): Promise<{ pd
     let page: PDFPage
     if (ref.file === BLANK_PAGE_FILE) {
       page = pdf.addPage([ref.width, ref.height])
-    } else if (ref.file === 0 && !reused.has(ref.index)) {
+    } else if (ref.file === 0 && usesEveryPageOfFirst && !reused.has(ref.index)) {
       page = pdf.getPage(ref.index)
       reused.add(ref.index)
     } else {

@@ -1,4 +1,4 @@
-import { PDFDocument } from 'pdf-lib'
+import { PDFDocument, PDFName, PDFString } from 'pdf-lib'
 import { describe, expect, it } from 'vitest'
 import type { PageRef } from '../editor/document'
 import { exportPdf } from './exportPdf'
@@ -49,5 +49,23 @@ describe('exportPdf', () => {
     const file = await pdfWithPages([100, 100])
     const saved = await exportPdf([file], { pages: [ref(0, 0), { ...ref(0, 0), id: 'copy' }], annotations: [] })
     expect(await pagesOf(saved)).toHaveLength(2)
+  })
+
+  it('削除したページの中身は、保存したファイルのどこにも残らない', async () => {
+    const pdf = await PDFDocument.create()
+    pdf.addPage([100, 100])
+    pdf.addPage([100, 100]).node.set(PDFName.of('Secret'), PDFString.of('DELETED-PAGE-MARKER'))
+    const saved = await exportPdf([await pdf.save()], { pages: [ref(0, 0)], annotations: [] })
+
+    const objects = (await PDFDocument.load(saved)).context.enumerateIndirectObjects()
+    expect(objects.some(([, object]) => object.toString().includes('DELETED-PAGE-MARKER'))).toBe(false)
+  })
+
+  it('すべてのページを使うときは、しおりなど文書全体の情報を保つ', async () => {
+    const pdf = await PDFDocument.create()
+    pdf.addPage([100, 100])
+    pdf.catalog.set(PDFName.of('Outlines'), pdf.context.obj({ Type: 'Outlines' }))
+    const saved = await exportPdf([await pdf.save()], { pages: [ref(0, 0, 90)], annotations: [] })
+    expect((await PDFDocument.load(saved)).catalog.has(PDFName.of('Outlines'))).toBe(true)
   })
 })
