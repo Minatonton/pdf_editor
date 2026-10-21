@@ -223,7 +223,7 @@ export function PageView({
             scale={scale}
             valueOf={fieldValueOf}
             onChange={onFieldChange}
-            interactive={!placing}
+            interactive={!drawMode}
           />
         )}
         {textMode &&
@@ -247,14 +247,16 @@ export function PageView({
             scale={scale}
             selected={annotation.id === selectedId}
             editing={annotation.id === editingId}
-            interactive={!placing}
+            // クリックで置く道具を持っていても、置いたものはつかめるようにする。道具を持ち替えないと動かせないと、
+            // どのモードなら動かせるのか迷わせてしまう。範囲を描く道具のときだけは、描き始めとつかむ操作がぶつかるのでつかめない
+            interactive={!drawMode}
             onSelect={onSelect}
             onEdit={onEdit}
             onEditEnd={onEditEnd}
             dispatch={dispatch}
           />
         ))}
-        {selected && !placing && (
+        {selected && !drawMode && (
           <SelectionToolbar annotation={selected} scale={scale} pageOptions={pageOptions} onRemove={() => onRemove(selected.id)} dispatch={dispatch} />
         )}
       </div>
