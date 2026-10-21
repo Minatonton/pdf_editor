@@ -13,6 +13,7 @@ import {
 } from './annotations/types'
 import { PagePanel } from './components/PagePanel'
 import { PageView } from './components/PageView'
+import { SignatureDialog, type SignatureKind } from './components/SignatureDialog'
 import { EMPTY_HISTORY, editorReducer, viewSizeOf, type EditorAction, type PageRef } from './editor/document'
 import { exportPdf } from './pdf/exportPdf'
 import { boundsOf, type Point } from './pdf/geometry'
@@ -22,13 +23,16 @@ type Tool =
   | { kind: 'select' }
   | { kind: 'text' }
   | { kind: 'stamp'; text: string }
-  | { kind: 'image'; image: LoadedImage }
+  /** width を指定しないときは、画像の画素数から大きさを決める */
+  | { kind: 'image'; image: LoadedImage; width?: number }
   | { kind: 'rect'; style: RectStyle }
   | { kind: 'shape'; variant: ShapeVariant }
 
 const ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2]
 /** 画像の画素を、画面と同じ 96dpi とみなしてポイントに直す */
 const POINTS_PER_PIXEL = 72 / 96
+const SIGNATURE_WIDTH = 150
+const SEAL_WIDTH = 42
 
 /** フォームになっていない書類に記入するときによく使う記号と、今日の日付 */
 function stampTexts(): string[] {
@@ -64,6 +68,7 @@ export default function App() {
   const [shapeStyle, setShapeStyle] = useState<ShapeStyle>(DEFAULT_SHAPE_STYLE)
   const [zoom, setZoom] = useState(1)
   const [busy, setBusy] = useState(false)
+  const [signing, setSigning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const pdfInput = useRef<HTMLInputElement>(null)
   const imageInput = useRef<HTMLInputElement>(null)
@@ -219,7 +224,7 @@ export default function App() {
       const page = pages.find((ref) => ref.id === pageId)!
       const pageWidth = viewSizeOf(page).width
       const { image } = tool
-      const width = Math.min(image.pixelWidth * POINTS_PER_PIXEL, pageWidth / 2)
+      const width = tool.width ?? Math.min(image.pixelWidth * POINTS_PER_PIXEL, pageWidth / 2)
       const height = (image.pixelHeight * width) / image.pixelWidth
       dispatch({
         type: 'add',
@@ -377,6 +382,9 @@ export default function App() {
         >
           ペン
         </button>
+        <button disabled={!pdf} onClick={() => setSigning(true)} title="手書きの署名、名前の署名、印鑑を作って置く">
+          署名・印鑑
+        </button>
         <span className="divider" />
         <button disabled={history.past.length === 0} onClick={() => dispatch({ type: 'undo' })} title="元に戻す（⌘Z）">
           元に戻す
@@ -424,6 +432,17 @@ export default function App() {
           }}
         />
       </header>
+
+      {signing && (
+        <SignatureDialog
+          onClose={() => setSigning(false)}
+          onCreate={(image: LoadedImage, kind: SignatureKind) => {
+            setSigning(false)
+            // 署名欄や押印欄にそのまま収まる大きさで置く。印鑑は一般的な認印の直径（約15mm）
+            setTool({ kind: 'image', image, width: kind === 'seal' ? SEAL_WIDTH : SIGNATURE_WIDTH })
+          }}
+        />
+      )}
 
       {error && (
         <div className="error" role="alert">

@@ -442,3 +442,100 @@ button.danger {
   background: var(--accent-soft);
   color: var(--accent);
 }
+
+.dialog-backdrop {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 0.35);
+}
+
+.dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(560px, calc(100vw - 32px));
+  padding: 20px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: 0 8px 32px rgb(0 0 0 / 0.25);
+}
+
+.dialog .tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.dialog .tabs button[aria-selected='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.dialog .row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dialog input:not([type]) {
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.dialog .swatch {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.dialog .swatch[aria-pressed='true'] {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.dialog button[aria-pressed='true']:not(.swatch) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.sign-pad {
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-sm);
+  background: repeating-linear-gradient(transparent 0 139px, var(--line) 139px 140px, transparent 140px 180px);
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.type-preview {
+  overflow: hidden;
+  padding: 8px 12px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-sm);
+  font-size: 40px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.seal-preview {
+  display: grid;
+  place-items: center;
+  height: 140px;
+}
+
+.seal-preview img {
+  width: 120px;
+  height: 120px;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
