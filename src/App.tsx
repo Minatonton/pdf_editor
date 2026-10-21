@@ -16,6 +16,7 @@ import { PageMarksDialog } from './components/PageMarksDialog'
 import { SignatureDialog, type SignatureKind } from './components/SignatureDialog'
 import { ToolBar } from './components/ToolBar'
 import { MARK_COLORS, type Tool } from './editor/tools'
+import { clampZoom, fitWidthZoom, stepZoom, ZOOM_STEPS } from './editor/zoom'
 import type { Annotation } from './annotations/types'
 import { EMPTY_HISTORY, editorReducer, fieldKey, viewSizeOf, type EditorAction, type PageRef } from './editor/document'
 import { exportPdf } from './pdf/exportPdf'
@@ -24,7 +25,6 @@ import { openPdf, pageRefsOf, type OpenedPdf } from './pdf/loadPdf'
 import { rasterizerFor } from './pdf/rasterize'
 import type { TextRun } from './pdf/textRuns'
 
-const ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2]
 /** 画像の画素を、画面と同じ 96dpi とみなしてポイントに直す */
 const POINTS_PER_PIXEL = 72 / 96
 const SIGNATURE_WIDTH = 150
@@ -63,6 +63,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
   /** 写したもの。ブラウザのクリップボードには入れない（画像の中身や署名を外に出さないため） */
   const clipboard = useRef<Annotation | null>(null)
+  const pagesArea = useRef<HTMLElement>(null)
   const pdfInput = useRef<HTMLInputElement>(null)
   const imageInput = useRef<HTMLInputElement>(null)
 
@@ -79,6 +80,28 @@ export default function App() {
     if (action.type === 'editShape') setShapeStyle((style) => ({ ...style, ...action.changes }))
     dispatchHistory(action)
   }
+
+  const fitWidth = () => {
+    // ページの左右の余白（padding 24px ずつ）とスクロールバーのぶんを除いた幅に収める
+    const available = (pagesArea.current?.clientWidth ?? 800) - 64
+    return fitWidthZoom(available, pages.map((page) => viewSizeOf(page).width))
+  }
+
+  // トラックパッドのピンチは ctrl 付きのホイールとして届く。ブラウザ全体が拡大されないよう、ページの表示だけを拡大する
+  useEffect(() => {
+    const area = pagesArea.current
+    if (!area) return
+    const handleWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return
+      event.preventDefault()
+      // マウスのホイールは1目盛りで 100 前後と大きく、そのままだと一気に拡大されるので、1回の変化に上限を付ける
+      const delta = Math.max(-20, Math.min(20, event.deltaY))
+      setZoom((current) => clampZoom(current * Math.exp(-delta * 0.01)))
+    }
+    // React の onWheel は preventDefault できない（passive）ので、直接登録する
+    area.addEventListener('wheel', handleWheel, { passive: false })
+    return () => area.removeEventListener('wheel', handleWheel)
+  }, [pdf])
 
   useEffect(() => {
     if (!hasEdits) return
@@ -129,6 +152,11 @@ export default function App() {
         return
       }
       const shortcut = event.metaKey || event.ctrlKey ? event.key.toLowerCase() : null
+      if (pdf && (shortcut === '=' || shortcut === '+' || shortcut === '-' || shortcut === '0')) {
+        event.preventDefault()
+        setZoom(shortcut === '0' ? 1 : stepZoom(zoom, shortcut === '-' ? -1 : 1))
+        return
+      }
       if (shortcut === 'v' && clipboard.current) {
         event.preventDefault()
         // 貼るたびに少しずらす。同じ場所に重なると、貼れたのか分からないため
@@ -440,13 +468,26 @@ export default function App() {
           やり直す
         </button>
         <span className="divider" />
-        <select value={zoom} onChange={(event) => setZoom(Number(event.target.value))} disabled={!pdf} aria-label="表示倍率">
-          {ZOOMS.map((value) => (
+        <button className="icon" disabled={!pdf} onClick={() => setZoom(stepZoom(zoom, -1))} title="縮小（⌘−）">
+          −
+        </button>
+        <select
+          value={ZOOM_STEPS.includes(zoom) ? zoom : 'current'}
+          onChange={(event) => setZoom(event.target.value === 'fit' ? fitWidth() : Number(event.target.value))}
+          disabled={!pdf}
+          aria-label="表示倍率"
+        >
+          {!ZOOM_STEPS.includes(zoom) && <option value="current">{Math.round(zoom * 100)}%</option>}
+          {ZOOM_STEPS.map((value) => (
             <option key={value} value={value}>
               {Math.round(value * 100)}%
             </option>
           ))}
+          <option value="fit">幅に合わせる</option>
         </select>
+        <button className="icon" disabled={!pdf} onClick={() => setZoom(stepZoom(zoom, 1))} title="拡大（⌘＋）">
+          ＋
+        </button>
         <button className="primary" disabled={!pdf || busy} onClick={handleExport}>
           PDF を保存
         </button>
@@ -524,7 +565,7 @@ export default function App() {
           />
         )}
         {placingHint && <div className="placing-hint">{placingHint}（Esc でやめる）</div>}
-        <main className="pages">
+        <main className="pages" ref={pagesArea}>
           {pdf ? (
             pages.map((ref, pageIndex) => (
               <PageView

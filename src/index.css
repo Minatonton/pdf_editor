@@ -704,3 +704,8 @@ input.form-field[type='radio'] {
   white-space: normal;
   resize: vertical;
 }
+
+.toolbar button.icon {
+  width: 32px;
+  padding: 0;
+}
