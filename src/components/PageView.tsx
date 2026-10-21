@@ -2,7 +2,8 @@ import type { PDFPageProxy } from 'pdfjs-dist'
 import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from 'react'
 import { viewSizeOf, type EditorAction, type PageRef } from '../editor/document'
 import type { Annotation } from '../annotations/types'
-import type { ViewRect } from '../pdf/geometry'
+import { boundsOf, type Point } from '../pdf/geometry'
+
 import { AnnotationBox } from './AnnotationBox'
 import { SelectionToolbar } from './SelectionToolbar'
 
@@ -15,9 +16,9 @@ export function PageView({
   selectedId,
   editingId,
   placing,
-  drawsBox,
+  drawMode,
   onPlace,
-  onDrawBox,
+  onDraw,
   onSelect,
   onEdit,
   onEditEnd,
@@ -33,10 +34,10 @@ export function PageView({
   selectedId: string | null
   editingId: string | null
   placing: boolean
-  /** クリックではなく、ドラッグで範囲を描いて置く */
-  drawsBox: boolean
+  /** クリックではなく、ドラッグで描いて置く。box は始点と終点だけ、ink はなぞった点をすべて渡す */
+  drawMode: 'box' | 'ink' | null
   onPlace: (pageId: string, x: number, y: number) => void
-  onDrawBox: (pageId: string, rect: ViewRect) => void
+  onDraw: (pageId: string, points: Point[]) => void
   onSelect: (id: string | null) => void
   onEdit: (id: string) => void
   onEditEnd: () => void
@@ -46,7 +47,7 @@ export function PageView({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const size = viewSizeOf(page)
   const selected = annotations.find((annotation) => annotation.id === selectedId)
-  const [drawing, setDrawing] = useState<{ startX: number; startY: number; x: number; y: number } | null>(null)
+  const [drawing, setDrawing] = useState<Point[] | null>(null)
   // 描き終えた直後に続けて届く click を、何もない所のクリック（選択の解除）として扱わないための印
   const justDrew = useRef(false)
 
@@ -71,7 +72,7 @@ export function PageView({
       justDrew.current = false
       return
     }
-    if (event.target !== event.currentTarget || event.button !== 0 || drawsBox) return
+    if (event.target !== event.currentTarget || event.button !== 0 || drawMode) return
     if (!placing) {
       onSelect(null)
       return
@@ -85,30 +86,24 @@ export function PageView({
     return { x: (event.clientX - bounds.left) / scale, y: (event.clientY - bounds.top) / scale }
   }
 
-  const rectOf = (d: NonNullable<typeof drawing>): ViewRect => ({
-    x: Math.min(d.startX, d.x),
-    y: Math.min(d.startY, d.y),
-    width: Math.abs(d.x - d.startX),
-    height: Math.abs(d.y - d.startY),
-  })
-  const drawnRect = drawing && rectOf(drawing)
+  const drawnRect = drawing && boundsOf(drawing)
 
-  const drawHandlers = drawsBox
+  const drawHandlers = drawMode
     ? {
         onPointerDown: (event: PointerEvent<HTMLDivElement>) => {
           if (event.button !== 0) return
           event.currentTarget.setPointerCapture(event.pointerId)
-          const point = pointInPage(event)
-          setDrawing({ startX: point.x, startY: point.y, ...point })
+          setDrawing([pointInPage(event)])
         },
         onPointerMove: (event: PointerEvent<HTMLDivElement>) => {
           const point = pointInPage(event)
-          setDrawing((current) => current && { ...current, ...point })
+          setDrawing((current) => current && (drawMode === 'ink' ? [...current, point] : [current[0], point]))
         },
         // 指を離した位置は、最後の描画を待たずにこのイベントから取る。素早く引くと描画が追いつかないため
         onPointerUp: (event: PointerEvent<HTMLDivElement>) => {
           if (!drawing) return
-          onDrawBox(page.id, rectOf({ ...drawing, ...pointInPage(event) }))
+          const last = pointInPage(event)
+          onDraw(page.id, drawMode === 'ink' ? [...drawing, last] : [drawing[0], last])
           justDrew.current = true
           setDrawing(null)
         },
@@ -119,7 +114,19 @@ export function PageView({
     <div className="page" id={`page-${page.id}`} style={{ width: size.width * scale, height: size.height * scale }}>
       {proxy && <canvas ref={canvasRef} style={{ width: size.width * scale, height: size.height * scale }} />}
       <div className="page-overlay" data-placing={placing} onClick={handleClick} {...drawHandlers}>
-        {drawnRect && (
+        {drawing && drawMode === 'ink' && (
+          <svg className="drawing-ink" width="100%" height="100%">
+            <polyline
+              points={drawing.map((p) => `${p.x * scale},${p.y * scale}`).join(' ')}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        )}
+        {drawnRect && drawMode === 'box' && (
           <div
             className="drawing-rect"
             style={{

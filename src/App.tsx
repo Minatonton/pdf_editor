@@ -1,12 +1,21 @@
 import { useEffect, useReducer, useRef, useState, type DragEvent } from 'react'
 import { loadImageFile, type LoadedImage } from './annotations/imageFile'
 import { TEXT_LINE_HEIGHT } from './annotations/textRaster'
-import { DEFAULT_TEXT_STYLE, RECT_PRESETS, type RectStyle, type TextStyle } from './annotations/types'
+import { normalizePoints } from './annotations/shapePath'
+import {
+  DEFAULT_SHAPE_STYLE,
+  DEFAULT_TEXT_STYLE,
+  RECT_PRESETS,
+  type RectStyle,
+  type ShapeStyle,
+  type ShapeVariant,
+  type TextStyle,
+} from './annotations/types'
 import { PagePanel } from './components/PagePanel'
 import { PageView } from './components/PageView'
 import { EMPTY_HISTORY, editorReducer, viewSizeOf, type EditorAction, type PageRef } from './editor/document'
 import { exportPdf } from './pdf/exportPdf'
-import type { ViewRect } from './pdf/geometry'
+import { boundsOf, type Point } from './pdf/geometry'
 import { openPdf, pageRefsOf, type OpenedPdf } from './pdf/loadPdf'
 
 type Tool =
@@ -14,6 +23,7 @@ type Tool =
   | { kind: 'text' }
   | { kind: 'image'; image: LoadedImage }
   | { kind: 'rect'; style: RectStyle }
+  | { kind: 'shape'; variant: ShapeVariant }
 
 const ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2]
 /** 画像の画素を、画面と同じ 96dpi とみなしてポイントに直す */
@@ -43,6 +53,7 @@ export default function App() {
   const pdfInputPurpose = useRef<{ insertAt: number } | 'open'>('open')
   const [tool, setTool] = useState<Tool>({ kind: 'select' })
   const [textStyle, setTextStyle] = useState<TextStyle>(DEFAULT_TEXT_STYLE)
+  const [shapeStyle, setShapeStyle] = useState<ShapeStyle>(DEFAULT_SHAPE_STYLE)
   const [zoom, setZoom] = useState(1)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -59,6 +70,7 @@ export default function App() {
       const { fontSize, color } = action.changes
       setTextStyle((style) => ({ fontSize: fontSize ?? style.fontSize, color: color ?? style.color }))
     }
+    if (action.type === 'editShape') setShapeStyle((style) => ({ ...style, ...action.changes }))
     dispatchHistory(action)
   }
 
@@ -224,15 +236,28 @@ export default function App() {
     setTool({ kind: 'select' })
   }
 
-  const handleDrawBox = (pageId: string, rect: ViewRect) => {
-    if (tool.kind !== 'rect') return
+  const handleDraw = (pageId: string, points: Point[]) => {
     const id = crypto.randomUUID()
-    // クリックしただけのときは、1行ぶんを隠せる大きさで置く
+    const rect = boundsOf(points)
+    // クリックしただけのときは、何も描かれないと置けたのか分からないので、決まった大きさで置く
     const clicked = rect.width < 4 && rect.height < 4
-    const box = clicked ? { x: rect.x, y: rect.y - 12, width: 120, height: 24 } : rect
-    dispatch({ type: 'add', annotation: { id, kind: 'rect', pageId, ...box, ...tool.style } })
+    if (tool.kind === 'rect') {
+      const box = clicked ? { x: rect.x, y: rect.y - 12, width: 120, height: 24 } : rect
+      dispatch({ type: 'add', annotation: { id, kind: 'rect', pageId, ...box, ...tool.style } })
+    } else if (tool.kind === 'shape') {
+      if (clicked && tool.variant === 'ink') return
+      const straight = tool.variant === 'line' || tool.variant === 'arrow'
+      const drawn = clicked ? [points[0], { x: points[0].x + 80, y: points[0].y + (straight ? 0 : 50) }] : points
+      dispatch({
+        type: 'add',
+        annotation: { id, kind: 'shape', pageId, variant: tool.variant, ...normalizePoints(drawn), ...shapeStyle },
+      })
+    } else {
+      return
+    }
     setSelectedId(id)
-    setTool({ kind: 'select' })
+    // 手書きは何画も続けて書くことが多いので、ペンを持ったままにする
+    if (tool.kind !== 'shape' || tool.variant !== 'ink') setTool({ kind: 'select' })
   }
 
   const handleExport = () => {
@@ -277,7 +302,11 @@ export default function App() {
         ? '画像を置く場所をクリック'
         : tool.kind === 'rect'
           ? '隠したい範囲をドラッグ'
-          : null
+          : tool.kind === 'shape'
+            ? tool.variant === 'ink'
+              ? 'ドラッグして書く'
+              : 'ドラッグして描く'
+            : null
 
   return (
     <div className="app" onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
@@ -302,6 +331,31 @@ export default function App() {
           title="白い四角を重ねて見えなくする。下の文字はファイルに残り、コピーや検索で読める"
         >
           白塗り
+        </button>
+        <select
+          disabled={!pdf}
+          value={tool.kind === 'shape' && tool.variant !== 'ink' ? tool.variant : ''}
+          onChange={(event) =>
+            setTool(event.target.value ? { kind: 'shape', variant: event.target.value as ShapeVariant } : { kind: 'select' })
+          }
+          aria-label="図形"
+          data-active={tool.kind === 'shape' && tool.variant !== 'ink'}
+        >
+          <option value="">図形…</option>
+          <option value="rectangle">□ 四角</option>
+          <option value="ellipse">○ 楕円</option>
+          <option value="line">― 線</option>
+          <option value="arrow">→ 矢印</option>
+        </select>
+        <button
+          disabled={!pdf}
+          aria-pressed={tool.kind === 'shape' && tool.variant === 'ink'}
+          onClick={() =>
+            setTool(tool.kind === 'shape' && tool.variant === 'ink' ? { kind: 'select' } : { kind: 'shape', variant: 'ink' })
+          }
+          title="手書きで書き込む（Esc でやめる）"
+        >
+          ペン
         </button>
         <span className="divider" />
         <button disabled={history.past.length === 0} onClick={() => dispatch({ type: 'undo' })} title="元に戻す（⌘Z）">
@@ -385,9 +439,9 @@ export default function App() {
                 selectedId={selectedId}
                 editingId={editingId}
                 placing={tool.kind !== 'select'}
-                drawsBox={tool.kind === 'rect'}
+                drawMode={tool.kind === 'rect' || (tool.kind === 'shape' && tool.variant !== 'ink') ? 'box' : tool.kind === 'shape' ? 'ink' : null}
                 onPlace={handlePlace}
-                onDrawBox={handleDrawBox}
+                onDraw={handleDraw}
                 onSelect={(id) => {
                   if (id !== editingId) setEditingId(null)
                   setSelectedId(id)

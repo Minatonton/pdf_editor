@@ -70,3 +70,16 @@ export function placeInPdf(rect: ViewRect, box: PageBox, rotation: Rotation): Pd
   const anchor = viewToPdfPoint(rect.x, rect.y + rect.height, box, rotation)
   return { x: anchor.x, y: anchor.y, width: rect.width, height: rect.height, rotateDegrees: rotation }
 }
+
+export interface Point {
+  x: number
+  y: number
+}
+
+export function boundsOf(points: Point[]): ViewRect {
+  const xs = points.map((p) => p.x)
+  const ys = points.map((p) => p.y)
+  const x = Math.min(...xs)
+  const y = Math.min(...ys)
+  return { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y }
+}

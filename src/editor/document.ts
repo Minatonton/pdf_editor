@@ -1,4 +1,5 @@
-import { MIN_BOX_SIZE, type Annotation, type RectStyle, type TextAnnotation } from '../annotations/types'
+import { resizeBox } from '../annotations/boxSize'
+import type { Annotation, RectStyle, ShapeStyle, TextAnnotation } from '../annotations/types'
 import { normalizeRotation, pdfToViewPoint, viewToPdfPoint, type PageBox, type Rotation } from '../pdf/geometry'
 
 /** 保存する PDF の1ページ。どのファイルの何ページ目を、どの向きで使うか */
@@ -33,9 +34,9 @@ export type EditorAction =
   | { type: 'open'; pages: PageRef[] }
   | { type: 'add'; annotation: Annotation }
   | { type: 'move'; id: string; dx: number; dy: number }
-  /** 画像は縦横比を保つので height を使わない */
   | { type: 'resize'; id: string; width: number; height: number }
   | { type: 'editRect'; id: string; changes: Partial<RectStyle> }
+  | { type: 'editShape'; id: string; changes: Partial<ShapeStyle> }
   | { type: 'editText'; id: string; changes: Partial<Pick<TextAnnotation, 'text' | 'fontSize' | 'color'>> }
   | { type: 'remove'; id: string }
   | { type: 'rotatePages'; ids: string[]; degrees: 90 | -90 }
@@ -95,14 +96,13 @@ export function editorReducer(history: History, action: EditorAction): History {
     case 'move':
       return updateAnnotation(history, action.id, (a) => ({ ...a, x: a.x + action.dx, y: a.y + action.dy }))
     case 'resize':
-      return updateAnnotation(history, action.id, (a) => {
-        const width = Math.max(MIN_BOX_SIZE, action.width)
-        if (a.kind === 'image') return { ...a, width, height: (a.height * width) / a.width }
-        if (a.kind === 'rect') return { ...a, width, height: Math.max(MIN_BOX_SIZE, action.height) }
-        return a
-      })
+      return updateAnnotation(history, action.id, (a) =>
+        a.kind === 'text' ? a : { ...a, ...resizeBox(a, action.width, action.height) },
+      )
     case 'editRect':
       return updateAnnotation(history, action.id, (a) => (a.kind === 'rect' ? { ...a, ...action.changes } : a))
+    case 'editShape':
+      return updateAnnotation(history, action.id, (a) => (a.kind === 'shape' ? { ...a, ...action.changes } : a))
     case 'editText': {
       const edit = (a: Annotation) => (a.id === action.id && a.kind === 'text' ? { ...a, ...action.changes } : a)
       const edited = { ...present, annotations: present.annotations.map(edit) }

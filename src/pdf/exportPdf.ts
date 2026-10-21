@@ -1,7 +1,8 @@
-import { BlendMode, degrees, PDFDocument, rgb, type PDFImage, type PDFPage } from 'pdf-lib'
+import { BlendMode, degrees, LineCapStyle, PDFDocument, rgb, type PDFImage, type PDFPage } from 'pdf-lib'
+import { shapePath } from '../annotations/shapePath'
 import { rasterizeText } from '../annotations/textRaster'
 import { BLANK_PAGE_FILE, type EditorDocument, type PageRef } from '../editor/document'
-import { placeInPdf, type PageBox, type ViewRect } from './geometry'
+import { placeInPdf, viewToPdfPoint, type PageBox, type ViewRect } from './geometry'
 
 /**
  * 1つ目のファイルのページをすべて使うときは、それを読み込んだものを土台にしてページを並べ直す。
@@ -65,6 +66,19 @@ export async function exportPdf(files: Uint8Array[], document: EditorDocument): 
         color: hexToRgb(annotation.color),
         opacity: annotation.opacity,
         blendMode: annotation.opacity < 1 ? BlendMode.Multiply : BlendMode.Normal,
+      })
+      continue
+    }
+
+    if (annotation.kind === 'shape') {
+      // SVG のパスは原点から下向きに描かれるので、画面上の左上の角を原点にして、ページの向きと同じだけ回す
+      const origin = viewToPdfPoint(annotation.x, annotation.y, box, target.ref.rotation)
+      target.page.drawSvgPath(shapePath(annotation), {
+        ...origin,
+        rotate: degrees(target.ref.rotation),
+        borderColor: hexToRgb(annotation.color),
+        borderWidth: annotation.strokeWidth,
+        borderLineCap: LineCapStyle.Round,
       })
       continue
     }

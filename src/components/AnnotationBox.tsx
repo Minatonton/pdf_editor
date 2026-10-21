@@ -2,7 +2,9 @@ import { useRef, useState, type PointerEvent } from 'react'
 import type { EditorAction } from '../editor/document'
 import { mimeTypeOf } from '../annotations/imageFile'
 import { TEXT_FONT_FAMILY, TEXT_LINE_HEIGHT } from '../annotations/textRaster'
-import { MIN_BOX_SIZE, type Annotation, type ImageAnnotation, type RectAnnotation } from '../annotations/types'
+import { resizeBox } from '../annotations/boxSize'
+import { shapePath } from '../annotations/shapePath'
+import type { Annotation, BoxAnnotation, ImageAnnotation } from '../annotations/types'
 
 interface Drag {
   mode: 'move' | 'resize'
@@ -115,6 +117,25 @@ export function AnnotationBox({
         onPointerCancel={handleEnd}
       >
         {annotation.kind === 'image' && <img src={objectUrlOf(annotation)} alt="" draggable={false} />}
+        {annotation.kind === 'shape' && (
+          // viewBox で拡大させず、画面の画素で描く。水平や垂直の線は箱の幅か高さが 0 になり、viewBox では描けないため。
+          // 線の太さぶん箱の外にはみ出すので、外も見えるようにしておく
+          <svg width={Math.max(width * scale, 1)} height={Math.max(height * scale, 1)} overflow="visible">
+            <path
+              d={shapePath({
+                ...annotation,
+                width: width * scale,
+                height: height * scale,
+                strokeWidth: annotation.strokeWidth * scale,
+              })}
+              fill="none"
+              stroke={annotation.color}
+              strokeWidth={annotation.strokeWidth * scale}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        )}
         {selected && <span className="resize-handle" onPointerDown={begin('resize')} aria-label="大きさを変える" />}
       </div>
     )
@@ -163,10 +184,8 @@ export function AnnotationBox({
   )
 }
 
-function resizedBox(annotation: ImageAnnotation | RectAnnotation, dx: number, dy: number) {
-  const width = Math.max(MIN_BOX_SIZE, annotation.width + dx)
-  if (annotation.kind === 'image') return { width, height: (annotation.height * width) / annotation.width }
-  return { width, height: Math.max(MIN_BOX_SIZE, annotation.height + dy) }
+function resizedBox(annotation: BoxAnnotation, dx: number, dy: number) {
+  return resizeBox(annotation, annotation.width + dx, annotation.height + dy)
 }
 
 const MIN_FONT_SIZE = 4

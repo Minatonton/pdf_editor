@@ -33,7 +33,22 @@ export interface RectAnnotation extends Placed {
   opacity: number
 }
 
-export type Annotation = TextAnnotation | ImageAnnotation | RectAnnotation
+export type ShapeVariant = 'rectangle' | 'ellipse' | 'line' | 'arrow' | 'ink'
+
+/** 線で描くもの。線・矢印・手書きの点は、幅と高さに対する割合（0〜1）で持ち、大きさを変えても形を保つ */
+export interface ShapeAnnotation extends Placed {
+  kind: 'shape'
+  variant: ShapeVariant
+  width: number
+  height: number
+  points: [number, number][]
+  color: string
+  strokeWidth: number
+}
+
+export type Annotation = TextAnnotation | ImageAnnotation | RectAnnotation | ShapeAnnotation
+
+export type BoxAnnotation = ImageAnnotation | RectAnnotation | ShapeAnnotation
 
 export type TextStyle = Pick<TextAnnotation, 'fontSize' | 'color'>
 
@@ -44,6 +59,10 @@ export const RECT_PRESETS: { label: string; style: RectStyle }[] = [
   { label: '白塗り', style: { color: '#ffffff', opacity: 1 } },
   { label: 'マーカー', style: { color: '#ffe14d', opacity: 0.4 } },
 ]
+
+export type ShapeStyle = Pick<ShapeAnnotation, 'color' | 'strokeWidth'>
+
+export const DEFAULT_SHAPE_STYLE: ShapeStyle = { color: '#d6403f', strokeWidth: 2 }
 
 /** これより小さくすると、選んだりつかんだりできなくなる */
 export const MIN_BOX_SIZE = 8

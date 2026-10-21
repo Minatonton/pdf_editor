@@ -418,3 +418,21 @@ button.danger {
   background: #fff;
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.2);
 }
+
+.annotation.shape svg {
+  display: block;
+}
+
+/* 細い線でもつかめるよう、見た目より広い範囲で反応させる */
+.annotation.shape::before {
+  position: absolute;
+  inset: -6px;
+  content: '';
+}
+
+.drawing-ink {
+  position: absolute;
+  inset: 0;
+  color: var(--accent);
+  pointer-events: none;
+}

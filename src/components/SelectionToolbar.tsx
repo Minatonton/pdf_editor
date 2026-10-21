@@ -43,6 +43,7 @@ export function SelectionToolbar({
             {preset.label}
           </button>
         ))}
+      {annotation.kind === 'shape' && <ShapeControls annotation={annotation} dispatch={dispatch} />}
       {annotation.kind === 'rect' && (
         <span className="toolbar-note" title="下の文字はファイルに残り、コピーや検索で読める">
           見た目だけ隠す
@@ -79,6 +80,40 @@ function TextControls({
           style={{ background: color }}
           onClick={() => edit({ color })}
           title="文字の色"
+        />
+      ))}
+      <input type="color" value={annotation.color} onChange={(event) => edit({ color: event.target.value })} title="ほかの色" />
+    </>
+  )
+}
+
+const STROKE_WIDTHS = [1, 2, 4, 8]
+
+function ShapeControls({
+  annotation,
+  dispatch,
+}: {
+  annotation: Extract<Annotation, { kind: 'shape' }>
+  dispatch: (action: EditorAction) => void
+}) {
+  const edit = (changes: { color?: string; strokeWidth?: number }) => dispatch({ type: 'editShape', id: annotation.id, changes })
+  return (
+    <>
+      <select value={annotation.strokeWidth} onChange={(event) => edit({ strokeWidth: Number(event.target.value) })} title="線の太さ">
+        {STROKE_WIDTHS.map((width) => (
+          <option key={width} value={width}>
+            {width}pt
+          </option>
+        ))}
+      </select>
+      {COLORS.map((color) => (
+        <button
+          key={color}
+          className="swatch"
+          aria-pressed={annotation.color === color}
+          style={{ background: color }}
+          onClick={() => edit({ color })}
+          title="線の色"
         />
       ))}
       <input type="color" value={annotation.color} onChange={(event) => edit({ color: event.target.value })} title="ほかの色" />
