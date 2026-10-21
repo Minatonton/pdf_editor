@@ -1,13 +1,18 @@
 import { useEffect, useReducer, useRef, useState, type DragEvent } from 'react'
 import { loadImageFile, type LoadedImage } from './annotations/imageFile'
 import { TEXT_LINE_HEIGHT } from './annotations/textRaster'
-import { DEFAULT_TEXT_STYLE, type TextStyle } from './annotations/types'
+import { DEFAULT_TEXT_STYLE, RECT_PRESETS, type RectStyle, type TextStyle } from './annotations/types'
 import { PageView } from './components/PageView'
 import { EMPTY_HISTORY, editorReducer, viewSizeOf, type EditorAction } from './editor/document'
 import { exportPdf } from './pdf/exportPdf'
+import type { ViewRect } from './pdf/geometry'
 import { openPdf, pageRefsOf, type OpenedPdf } from './pdf/loadPdf'
 
-type Tool = { kind: 'select' } | { kind: 'text' } | { kind: 'image'; image: LoadedImage }
+type Tool =
+  | { kind: 'select' }
+  | { kind: 'text' }
+  | { kind: 'image'; image: LoadedImage }
+  | { kind: 'rect'; style: RectStyle }
 
 const ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2]
 /** 画像の画素を、画面と同じ 96dpi とみなしてポイントに直す */
@@ -190,6 +195,17 @@ export default function App() {
     setTool({ kind: 'select' })
   }
 
+  const handleDrawBox = (pageId: string, rect: ViewRect) => {
+    if (tool.kind !== 'rect') return
+    const id = crypto.randomUUID()
+    // クリックしただけのときは、1行ぶんを隠せる大きさで置く
+    const clicked = rect.width < 4 && rect.height < 4
+    const box = clicked ? { x: rect.x, y: rect.y - 12, width: 120, height: 24 } : rect
+    dispatch({ type: 'add', annotation: { id, kind: 'rect', pageId, ...box, ...tool.style } })
+    setSelectedId(id)
+    setTool({ kind: 'select' })
+  }
+
   const handleExport = () => {
     if (!pdf) return
     void run(async () => {
@@ -210,7 +226,13 @@ export default function App() {
   }
 
   const placingHint =
-    tool.kind === 'text' ? 'テキストを置く場所をクリック' : tool.kind === 'image' ? '画像を置く場所をクリック' : null
+    tool.kind === 'text'
+      ? 'テキストを置く場所をクリック'
+      : tool.kind === 'image'
+        ? '画像を置く場所をクリック'
+        : tool.kind === 'rect'
+          ? '隠したい範囲をドラッグ'
+          : null
 
   return (
     <div className="app" onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
@@ -227,6 +249,14 @@ export default function App() {
         </button>
         <button disabled={!pdf} aria-pressed={tool.kind === 'image'} onClick={() => imageInput.current?.click()}>
           画像
+        </button>
+        <button
+          disabled={!pdf}
+          aria-pressed={tool.kind === 'rect'}
+          onClick={() => setTool(tool.kind === 'rect' ? { kind: 'select' } : { kind: 'rect', style: RECT_PRESETS[0].style })}
+          title="白い四角を重ねて、元の文字や画像を隠す"
+        >
+          白塗り
         </button>
         <span className="divider" />
         <button disabled={history.past.length === 0} onClick={() => dispatch({ type: 'undo' })} title="元に戻す（⌘Z）">
@@ -294,7 +324,9 @@ export default function App() {
                 selectedId={selectedId}
                 editingId={editingId}
                 placing={tool.kind !== 'select'}
+                drawsBox={tool.kind === 'rect'}
                 onPlace={handlePlace}
+                onDrawBox={handleDrawBox}
                 onSelect={(id) => {
                   if (id !== editingId) setEditingId(null)
                   setSelectedId(id)

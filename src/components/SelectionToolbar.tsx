@@ -1,4 +1,4 @@
-import type { Annotation } from '../annotations/types'
+import { RECT_PRESETS, type Annotation } from '../annotations/types'
 import type { EditorAction } from '../editor/document'
 
 const FONT_SIZES = [8, 10, 12, 14, 16, 20, 24, 32, 40, 48, 64, 72]
@@ -33,6 +33,16 @@ export function SelectionToolbar({
       }}
     >
       {annotation.kind === 'text' && <TextControls annotation={annotation} dispatch={dispatch} />}
+      {annotation.kind === 'rect' &&
+        RECT_PRESETS.map((preset) => (
+          <button
+            key={preset.label}
+            aria-pressed={annotation.color === preset.style.color && annotation.opacity === preset.style.opacity}
+            onClick={() => dispatch({ type: 'editRect', id: annotation.id, changes: preset.style })}
+          >
+            {preset.label}
+          </button>
+        ))}
       {remove}
     </div>
   )

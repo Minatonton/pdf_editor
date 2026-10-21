@@ -1,4 +1,4 @@
-import { MIN_IMAGE_WIDTH, type Annotation, type TextAnnotation } from '../annotations/types'
+import { MIN_BOX_SIZE, type Annotation, type RectStyle, type TextAnnotation } from '../annotations/types'
 import { normalizeRotation, type Rotation } from '../pdf/geometry'
 
 /** 保存する PDF の1ページ。どのファイルの何ページ目を、どの向きで使うか */
@@ -30,7 +30,9 @@ export type EditorAction =
   | { type: 'open'; pages: PageRef[] }
   | { type: 'add'; annotation: Annotation }
   | { type: 'move'; id: string; dx: number; dy: number }
-  | { type: 'resizeImage'; id: string; width: number }
+  /** 画像は縦横比を保つので height を使わない */
+  | { type: 'resize'; id: string; width: number; height: number }
+  | { type: 'editRect'; id: string; changes: Partial<RectStyle> }
   | { type: 'editText'; id: string; changes: Partial<Pick<TextAnnotation, 'text' | 'fontSize' | 'color'>> }
   | { type: 'remove'; id: string }
   | { type: 'undo' }
@@ -68,12 +70,15 @@ export function editorReducer(history: History, action: EditorAction): History {
       return commit(history, { ...present, annotations: [...present.annotations, action.annotation] })
     case 'move':
       return updateAnnotation(history, action.id, (a) => ({ ...a, x: a.x + action.dx, y: a.y + action.dy }))
-    case 'resizeImage':
+    case 'resize':
       return updateAnnotation(history, action.id, (a) => {
-        if (a.kind !== 'image') return a
-        const width = Math.max(MIN_IMAGE_WIDTH, action.width)
-        return { ...a, width, height: (a.height * width) / a.width }
+        const width = Math.max(MIN_BOX_SIZE, action.width)
+        if (a.kind === 'image') return { ...a, width, height: (a.height * width) / a.width }
+        if (a.kind === 'rect') return { ...a, width, height: Math.max(MIN_BOX_SIZE, action.height) }
+        return a
       })
+    case 'editRect':
+      return updateAnnotation(history, action.id, (a) => (a.kind === 'rect' ? { ...a, ...action.changes } : a))
     case 'editText': {
       const edit = (a: Annotation) => (a.id === action.id && a.kind === 'text' ? { ...a, ...action.changes } : a)
       const edited = { ...present, annotations: present.annotations.map(edit) }

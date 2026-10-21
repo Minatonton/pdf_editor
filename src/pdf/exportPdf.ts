@@ -1,4 +1,4 @@
-import { degrees, PDFDocument, type PDFImage, type PDFPage } from 'pdf-lib'
+import { BlendMode, degrees, PDFDocument, rgb, type PDFImage, type PDFPage } from 'pdf-lib'
 import { rasterizeText } from '../annotations/textRaster'
 import type { EditorDocument, PageRef } from '../editor/document'
 import { placeInPdf, type PageBox, type ViewRect } from './geometry'
@@ -47,6 +47,18 @@ export async function exportPdf(files: Uint8Array[], document: EditorDocument): 
     const crop = target.page.getCropBox()
     const box: PageBox = { left: crop.x, bottom: crop.y, right: crop.x + crop.width, top: crop.y + crop.height }
 
+    if (annotation.kind === 'rect') {
+      const placement = placeInPdf(annotation, box, target.ref.rotation)
+      target.page.drawRectangle({
+        ...placement,
+        rotate: degrees(placement.rotateDegrees),
+        color: hexToRgb(annotation.color),
+        opacity: annotation.opacity,
+        blendMode: annotation.opacity < 1 ? BlendMode.Multiply : BlendMode.Normal,
+      })
+      continue
+    }
+
     let image: PDFImage
     let rect: ViewRect
     if (annotation.kind === 'image') {
@@ -65,6 +77,11 @@ export async function exportPdf(files: Uint8Array[], document: EditorDocument): 
   }
 
   return pdf.save()
+}
+
+function hexToRgb(hex: string) {
+  const value = Number.parseInt(hex.slice(1), 16)
+  return rgb(((value >> 16) & 0xff) / 255, ((value >> 8) & 0xff) / 255, (value & 0xff) / 255)
 }
 
 function embed(pdf: PDFDocument, bytes: Uint8Array, format: 'png' | 'jpeg'): Promise<PDFImage> {

@@ -21,9 +21,29 @@ export interface ImageAnnotation extends Placed {
   format: 'png' | 'jpeg'
 }
 
-export type Annotation = TextAnnotation | ImageAnnotation
+/**
+ * 白塗りとマーカー。上に重ねて見えなくするだけで、下の文字は PDF に残る。
+ * そのため「黒塗り」はここには用意せず、中身ごと消す墨消しを別に用意する
+ */
+export interface RectAnnotation extends Placed {
+  kind: 'rect'
+  width: number
+  height: number
+  color: string
+  opacity: number
+}
+
+export type Annotation = TextAnnotation | ImageAnnotation | RectAnnotation
 
 export type TextStyle = Pick<TextAnnotation, 'fontSize' | 'color'>
 
 export const DEFAULT_TEXT_STYLE: TextStyle = { fontSize: 16, color: '#111111' }
-export const MIN_IMAGE_WIDTH = 8
+export type RectStyle = Pick<RectAnnotation, 'color' | 'opacity'>
+
+export const RECT_PRESETS: { label: string; style: RectStyle }[] = [
+  { label: '白塗り', style: { color: '#ffffff', opacity: 1 } },
+  { label: 'マーカー', style: { color: '#ffe14d', opacity: 0.4 } },
+]
+
+/** これより小さくすると、選んだりつかんだりできなくなる */
+export const MIN_BOX_SIZE = 8

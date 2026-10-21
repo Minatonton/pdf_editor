@@ -2,7 +2,7 @@ import { useRef, useState, type PointerEvent } from 'react'
 import type { EditorAction } from '../editor/document'
 import { mimeTypeOf } from '../annotations/imageFile'
 import { TEXT_FONT_FAMILY, TEXT_LINE_HEIGHT } from '../annotations/textRaster'
-import { MIN_IMAGE_WIDTH, type Annotation, type ImageAnnotation } from '../annotations/types'
+import { MIN_BOX_SIZE, type Annotation, type ImageAnnotation, type RectAnnotation } from '../annotations/types'
 
 interface Drag {
   mode: 'move' | 'resize'
@@ -75,8 +75,8 @@ export function AnnotationBox({
     const dx = drag.dx / scale
     const dy = drag.dy / scale
     if (drag.mode === 'move' && (dx !== 0 || dy !== 0)) dispatch({ type: 'move', id: annotation.id, dx, dy })
-    if (drag.mode === 'resize' && annotation.kind === 'image' && dx !== 0) {
-      dispatch({ type: 'resizeImage', id: annotation.id, width: annotation.width + dx })
+    if (drag.mode === 'resize' && annotation.kind !== 'text' && (dx !== 0 || dy !== 0)) {
+      dispatch({ type: 'resize', id: annotation.id, ...resizedBox(annotation, dx, dy) })
     }
     if (drag.mode === 'resize' && annotation.kind === 'text' && dx !== 0) {
       dispatch({ type: 'editText', id: annotation.id, changes: { fontSize: resizedFontSize(annotation.fontSize, drag) } })
@@ -92,21 +92,29 @@ export function AnnotationBox({
     pointerEvents: interactive ? 'auto' : 'none',
   }
 
-  if (annotation.kind === 'image') {
-    const width = Math.max(MIN_IMAGE_WIDTH, annotation.width + (drag?.mode === 'resize' ? drag.dx / scale : 0))
-    const height = (annotation.height * width) / annotation.width
+  if (annotation.kind !== 'text') {
+    const { width, height } =
+      drag?.mode === 'resize' ? resizedBox(annotation, drag.dx / scale, drag.dy / scale) : annotation
+    const fill: React.CSSProperties =
+      // opacity を要素に付けると選択の枠やつまみまで薄くなるので、塗りの色だけを透かす
+      annotation.kind === 'rect'
+        ? {
+            background: `color-mix(in srgb, ${annotation.color} ${annotation.opacity * 100}%, transparent)`,
+            mixBlendMode: annotation.opacity < 1 ? 'multiply' : 'normal',
+          }
+        : {}
     return (
       <div
         ref={box}
-        className="annotation image"
+        className={`annotation ${annotation.kind}`}
         data-selected={selected}
-        style={{ ...style, width: width * scale, height: height * scale }}
+        style={{ ...style, ...fill, width: width * scale, height: height * scale }}
         onPointerDown={begin('move')}
         onPointerMove={handleMove}
         onPointerUp={handleEnd}
         onPointerCancel={handleEnd}
       >
-        <img src={objectUrlOf(annotation)} alt="" draggable={false} />
+        {annotation.kind === 'image' && <img src={objectUrlOf(annotation)} alt="" draggable={false} />}
         {selected && <span className="resize-handle" onPointerDown={begin('resize')} aria-label="大きさを変える" />}
       </div>
     )
@@ -153,6 +161,12 @@ export function AnnotationBox({
       )}
     </div>
   )
+}
+
+function resizedBox(annotation: ImageAnnotation | RectAnnotation, dx: number, dy: number) {
+  const width = Math.max(MIN_BOX_SIZE, annotation.width + dx)
+  if (annotation.kind === 'image') return { width, height: (annotation.height * width) / annotation.width }
+  return { width, height: Math.max(MIN_BOX_SIZE, annotation.height + dy) }
 }
 
 const MIN_FONT_SIZE = 4

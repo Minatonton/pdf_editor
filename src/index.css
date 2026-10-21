@@ -327,3 +327,10 @@ button.danger {
   border-radius: var(--radius-sm);
   background: var(--surface);
 }
+
+.drawing-rect {
+  position: absolute;
+  border: 1px dashed var(--accent);
+  background: rgb(47 111 208 / 0.08);
+  pointer-events: none;
+}

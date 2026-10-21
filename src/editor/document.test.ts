@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { EMPTY_HISTORY, editorReducer, type EditorAction, type History } from './document'
-import type { ImageAnnotation, TextAnnotation } from '../annotations/types'
+import type { ImageAnnotation, RectAnnotation, TextAnnotation } from '../annotations/types'
 
 const text: TextAnnotation = { id: 't', kind: 'text', pageId: 'p1', x: 10, y: 20, text: 'こんにちは', fontSize: 16, color: '#111111' }
 const image: ImageAnnotation = {
@@ -26,13 +26,19 @@ describe('配置した要素の編集', () => {
   })
 
   it('画像の大きさを変えても縦横比は保つ', () => {
-    const { present: { annotations: present } } = run({ type: 'add', annotation: image }, { type: 'resizeImage', id: 'i', width: 100 })
+    const { present: { annotations: present } } = run({ type: 'add', annotation: image }, { type: 'resize', id: 'i', width: 100, height: 999 })
     expect(present[0]).toMatchObject({ width: 100, height: 50 })
   })
 
   it('画像は見失わないよう、一定より小さくはできない', () => {
-    const { present: { annotations: present } } = run({ type: 'add', annotation: image }, { type: 'resizeImage', id: 'i', width: 0 })
+    const { present: { annotations: present } } = run({ type: 'add', annotation: image }, { type: 'resize', id: 'i', width: 0, height: 0 })
     expect(present[0]).toMatchObject({ width: 8, height: 4 })
+  })
+
+  it('四角は縦と横を別々に変えられ、どちらも一定より小さくはできない', () => {
+    const rect: RectAnnotation = { id: 'r', kind: 'rect', pageId: 'p1', x: 0, y: 0, width: 50, height: 50, color: '#ffffff', opacity: 1 }
+    const { present } = run({ type: 'add', annotation: rect }, { type: 'resize', id: 'r', width: 120, height: 2 })
+    expect(present.annotations[0]).toMatchObject({ width: 120, height: 8 })
   })
 
   it('削除すると、その要素だけがなくなる', () => {
