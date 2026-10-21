@@ -146,4 +146,43 @@ describe('exportPdf', () => {
     const saved = await exportPdf([await pdf.save({ useObjectStreams: false })], { pages: [ref(0, 0)], annotations: [] })
     expect(await containsMarker(saved)).toBe(false)
   })
+
+  it('残したページの注釈が、削除したページの注釈の外観を直接指していても、その中身は残らない', async () => {
+    const pdf = await PDFDocument.create()
+    const kept = pdf.addPage([100, 100])
+    const secret = pdf.addPage([100, 100])
+    const appearance = pdf.context.register(pdf.context.stream('% DELETED-PAGE-MARKER in appearance\n'))
+    const secretNote = pdf.context.register(pdf.context.obj({ Type: 'Annot', Subtype: 'Square', Rect: [0, 0, 1, 1], AP: { N: appearance } }))
+    secret.node.set(PDFName.of('Annots'), pdf.context.obj([secretNote]))
+    const pointer = pdf.context.obj({ Type: 'Annot', Subtype: 'Square', Rect: [0, 0, 10, 10], AP: { N: appearance } })
+    kept.node.set(PDFName.of('Annots'), pdf.context.obj([pdf.context.register(pointer)]))
+
+    const saved = await exportPdf([await pdf.save({ useObjectStreams: false })], { pages: [ref(0, 0)], annotations: [] })
+    expect(await containsMarker(saved)).toBe(false)
+  })
+
+  it('親から受け継ぐ資源が削除したページの描画命令を指していても、その中身は残らない', async () => {
+    const pdf = await PDFDocument.create()
+    pdf.addPage([100, 100])
+    const secret = pdf.addPage([100, 100])
+    const secretContents = pdf.context.register(pdf.context.stream('% DELETED-PAGE-MARKER in contents\n'))
+    secret.node.set(PDFName.of('Contents'), secretContents)
+    const tree = pdf.catalog.Pages()
+    tree.set(PDFName.of('Resources'), pdf.context.obj({ XObject: { Leak: secretContents } }))
+    for (const page of pdf.getPages()) page.node.delete(PDFName.of('Resources'))
+
+    const saved = await exportPdf([await pdf.save({ useObjectStreams: false })], { pages: [ref(0, 0)], annotations: [] })
+    expect(await containsMarker(saved)).toBe(false)
+  })
+
+  it('残したページと削除したページが共有するフォントなどの資源は、残したページの表示のために残す', async () => {
+    const pdf = await PDFDocument.create()
+    const shared = pdf.context.register(pdf.context.obj({ Type: 'Font', Subtype: 'Type1', BaseFont: 'SHARED-FONT-MARKER' }))
+    for (const page of [pdf.addPage([100, 100]), pdf.addPage([100, 100])]) {
+      page.node.set(PDFName.of('Resources'), pdf.context.obj({ Font: { F1: shared } }))
+    }
+    const saved = await exportPdf([await pdf.save({ useObjectStreams: false })], { pages: [ref(0, 0)], annotations: [] })
+    const objects = (await PDFDocument.load(saved)).context.enumerateIndirectObjects()
+    expect(objects.some(([, object]) => object.toString().includes('SHARED-FONT-MARKER'))).toBe(true)
+  })
 })
