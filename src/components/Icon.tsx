@@ -49,6 +49,14 @@ const PATHS = {
   close: 'M6 6l12 12M18 6L6 18',
   panelRight: 'M4 4h16v16H4zM15 4v16',
   panelLeft: 'M4 4h16v16H4zM9 4v16',
+  alignLeft: 'M4 4v16M8 7h11v4H8zM8 13h6v4H8z',
+  alignCenterX: 'M12 4v16M6 7h12v4H6zM8.5 13h7v4h-7z',
+  alignRight: 'M20 4v16M5 7h11v4H5zM10 13h6v4h-6z',
+  alignTop: 'M4 4h16M7 8h4v11H7zM13 8h4v6h-4z',
+  alignCenterY: 'M4 12h16M7 6h4v12H7zM13 8.5h4v7h-4z',
+  alignBottom: 'M4 20h16M7 5h4v11H7zM13 10h4v6h-4z',
+  distributeX: 'M4 4v16M20 4v16M8.5 8h2.5v8H8.5zM13 8h2.5v8H13z',
+  distributeY: 'M4 4h16M4 20h16M8 8.5h8V11H8zM8 13h8v2.5H8z',
 } as const
 
 export type IconName = keyof typeof PATHS

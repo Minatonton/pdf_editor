@@ -250,8 +250,9 @@ export function AnnotationBox({
       ) : (
         annotation.text || '\u00a0'
       )}
-      {selected && (
-        // 入力中は文字の上を押すとカーソルの移動になるので、動かすためのつまみを枠の外に出す
+      {editing && (
+        // 入力中は文字の上を押すとカーソルの移動になるので、動かすためのつまみを枠の外に出す。
+        // 入力していないときは文字そのものをつかめるので出さない（複数選んだときに、つまみが並んでうるさいため）
         <span className="move-grip" onPointerDown={begin('move', true)} title="ドラッグして動かす" aria-label="動かす">
           <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden>
             {[3, 9].flatMap((x) => [3, 6, 9].map((y) => <circle key={`${x}-${y}`} cx={x} cy={y} r="1.1" fill="currentColor" />))}

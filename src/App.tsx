@@ -15,6 +15,7 @@ import { PageView } from './components/PageView'
 import { PageMarksDialog } from './components/PageMarksDialog'
 import { SignatureDialog, type SignatureKind } from './components/SignatureDialog'
 import { Icon } from './components/Icon'
+import { MultiSelectionBar } from './components/MultiSelectionBar'
 import { PageNavigator } from './components/PageNavigator'
 import { QuickTools } from './components/QuickTools'
 import { ToolContextBar } from './components/ToolContextBar'
@@ -25,7 +26,8 @@ import { clampZoom, fitWidthZoom, stepZoom } from './editor/zoom'
 import type { Annotation } from './annotations/types'
 import { EMPTY_HISTORY, editorReducer, fieldKey, viewSizeOf, visibleRectOf, type EditorAction, type PageRef } from './editor/document'
 import { exportPdf } from './pdf/exportPdf'
-import { boundsOf, type Point } from './pdf/geometry'
+import { alignMoves, type Alignment } from './editor/align'
+import { boundsOf, type Point, type ViewRect } from './pdf/geometry'
 import { openPdf, pageRefsOf, type OpenedPdf } from './pdf/loadPdf'
 import { rasterizerFor } from './pdf/rasterize'
 import type { TextRun } from './pdf/textRuns'
@@ -175,6 +177,25 @@ export default function App() {
     setGroupOffset(null)
     const ids = selectedIds.includes(id) ? selectedIds : [id]
     dispatch({ type: 'moveEach', moves: ids.map((target) => ({ id: target, dx, dy })) })
+  }
+
+  /**
+   * 選んだものを揃える。大きさは見た目から測り（文字は大きさを持っていないため）、ページごとに揃える。
+   * 別のページのものどうしを揃えても意味がないため
+   */
+  const alignSelection = (how: Alignment) => {
+    const byPage = new Map<Element, (ViewRect & { id: string })[]>()
+    for (const id of selectedIds) {
+      const element = document.querySelector<HTMLElement>(`.annotation[data-id="${CSS.escape(id)}"]`)
+      const overlay = element?.closest('.page-overlay')
+      if (!element || !overlay) continue
+      const r = element.getBoundingClientRect()
+      const origin = overlay.getBoundingClientRect()
+      const box = { id, x: (r.left - origin.left) / zoom, y: (r.top - origin.top) / zoom, width: r.width / zoom, height: r.height / zoom }
+      byPage.set(overlay, [...(byPage.get(overlay) ?? []), box])
+    }
+    const moves = [...byPage.values()].filter((boxes) => boxes.length > 1).flatMap((boxes) => alignMoves(boxes, how))
+    if (moves.length > 0) dispatch({ type: 'moveEach', moves })
   }
 
   /** Shift を押しながら選ぶと、選んでいるものに足したり外したりする */
@@ -622,6 +643,9 @@ export default function App() {
         {pdf && <ToolsPanel tool={tool} onRun={runEntry} />}
         <div className="document-area">
         {pdf && <QuickTools tool={tool} onRun={runEntry} />}
+        {selectedIds.length > 1 && !placingHint && (
+          <MultiSelectionBar count={selectedIds.length} onAlign={alignSelection} onRemove={() => removeAnnotations(selectedIds)} />
+        )}
         {placingHint && <ToolContextBar tool={tool} hint={placingHint} onDone={() => setTool({ kind: 'select' })} />}
         <main className="pages" ref={pagesArea} onScroll={trackCurrentPage}>
           {pdf ? (
