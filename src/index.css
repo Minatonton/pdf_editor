@@ -198,13 +198,19 @@ button.danger {
   box-shadow: 0 1px 4px rgb(0 0 0 / 0.18);
 }
 
-.page canvas {
+.page-clip {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.page-clip canvas {
+  position: absolute;
   display: block;
 }
 
 .page-overlay {
   position: absolute;
-  inset: 0;
 }
 
 .page-overlay[data-placing='true'] {
@@ -398,7 +404,6 @@ button.danger {
   color: var(--accent);
 }
 
-.thumbnails li[data-selected='true'] canvas,
 .thumbnails li[data-selected='true'] .blank-thumbnail {
   outline: 2px solid var(--accent);
 }
@@ -411,7 +416,21 @@ button.danger {
   box-shadow: 0 3px 0 var(--accent);
 }
 
-.thumbnails canvas,
+.thumbnail-clip {
+  position: relative;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.2);
+}
+
+.thumbnail-clip canvas {
+  position: absolute;
+}
+
+.thumbnails li[data-selected='true'] .thumbnail-clip {
+  outline: 2px solid var(--accent);
+}
+
 .blank-thumbnail {
   display: block;
   width: 112px;
@@ -646,7 +665,6 @@ input.form-field[type='radio'] {
 
 .page-marks {
   position: absolute;
-  inset: 0;
   overflow: hidden;
   color: #333;
   pointer-events: none;

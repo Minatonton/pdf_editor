@@ -1,6 +1,6 @@
 import { AnnotationMode, type PDFPageProxy } from 'pdfjs-dist'
 import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from 'react'
-import { viewSizeOf, type EditorAction, type FieldValue, type PageRef } from '../editor/document'
+import { viewSizeOf, visibleRectOf, type EditorAction, type FieldValue, type PageRef } from '../editor/document'
 import { expandMark, type PageMarks } from '../editor/pageMarks'
 import type { Annotation } from '../annotations/types'
 import { boundsOf, type Point } from '../pdf/geometry'
@@ -18,6 +18,7 @@ export function PageView({
   pageCount,
   pageOptions,
   pageMarks,
+  showFullPage,
   scale,
   annotations,
   selectedId,
@@ -45,6 +46,8 @@ export function PageView({
   /** リンクの移り先に選べるページ */
   pageOptions: { id: string; label: string }[]
   pageMarks: PageMarks
+  /** トリミングの範囲を描き直すときは、切り取る前のページ全体を見せる */
+  showFullPage: boolean
   scale: number
   annotations: Annotation[]
   selectedId: string | null
@@ -68,6 +71,7 @@ export function PageView({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const size = viewSizeOf(page)
+  const visible = showFullPage ? { x: 0, y: 0, ...size } : visibleRectOf(page)
   const selected = annotations.find((annotation) => annotation.id === selectedId)
   const [drawing, setDrawing] = useState<Point[] | null>(null)
   // 描き終えた直後に続けて届く click を、何もない所のクリック（選択の解除）として扱わないための印
@@ -153,9 +157,23 @@ export function PageView({
     : {}
 
   return (
-    <div className="page" id={`page-${page.id}`} style={{ width: size.width * scale, height: size.height * scale }}>
-      {proxy && <canvas ref={canvasRef} style={{ width: size.width * scale, height: size.height * scale }} />}
-      <div className="page-overlay" data-placing={placing} onClick={handleClick} {...drawHandlers}>
+    <div className="page" id={`page-${page.id}`} style={{ width: visible.width * scale, height: visible.height * scale }}>
+      <div className="page-clip">
+        {proxy && (
+          <canvas
+            ref={canvasRef}
+            style={{ left: -visible.x * scale, top: -visible.y * scale, width: size.width * scale, height: size.height * scale }}
+          />
+        )}
+      </div>
+      {/* 置いたものは切り取る前のページの座標で持つので、重ねる層もページ全体の大きさにしてずらす */}
+      <div
+        className="page-overlay"
+        data-placing={placing}
+        style={{ left: -visible.x * scale, top: -visible.y * scale, width: size.width * scale, height: size.height * scale }}
+        onClick={handleClick}
+        {...drawHandlers}
+      >
         {drawing && drawMode === 'ink' && (
           <svg className="drawing-ink" width="100%" height="100%">
             <polyline
@@ -179,10 +197,20 @@ export function PageView({
             }}
           />
         )}
-        <div className="page-marks" aria-hidden style={{ fontSize: 10 * scale }}>
+        <div
+          className="page-marks"
+          aria-hidden
+          style={{
+            left: visible.x * scale,
+            top: visible.y * scale,
+            width: visible.width * scale,
+            height: visible.height * scale,
+            fontSize: 10 * scale,
+          }}
+        >
           {pageMarks.header && <div className="page-mark header">{expandMark(pageMarks.header, pageNumber, pageCount)}</div>}
           {pageMarks.watermark && (
-            <div className="page-mark watermark" style={{ fontSize: (Math.min(size.width, size.height) / 8) * scale }}>
+            <div className="page-mark watermark" style={{ fontSize: (Math.min(visible.width, visible.height) / 8) * scale }}>
               {expandMark(pageMarks.watermark, pageNumber, pageCount)}
             </div>
           )}

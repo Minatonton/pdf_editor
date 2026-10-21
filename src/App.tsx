@@ -18,7 +18,7 @@ import { ToolBar } from './components/ToolBar'
 import { MARK_COLORS, type Tool } from './editor/tools'
 import { clampZoom, fitWidthZoom, stepZoom, ZOOM_STEPS } from './editor/zoom'
 import type { Annotation } from './annotations/types'
-import { EMPTY_HISTORY, editorReducer, fieldKey, viewSizeOf, type EditorAction, type PageRef } from './editor/document'
+import { EMPTY_HISTORY, editorReducer, fieldKey, viewSizeOf, visibleRectOf, type EditorAction, type PageRef } from './editor/document'
 import { exportPdf } from './pdf/exportPdf'
 import { boundsOf, type Point } from './pdf/geometry'
 import { openPdf, pageRefsOf, type OpenedPdf } from './pdf/loadPdf'
@@ -84,7 +84,7 @@ export default function App() {
   const fitWidth = () => {
     // ページの左右の余白（padding 24px ずつ）とスクロールバーのぶんを除いた幅に収める
     const available = (pagesArea.current?.clientWidth ?? 800) - 64
-    return fitWidthZoom(available, pages.map((page) => viewSizeOf(page).width))
+    return fitWidthZoom(available, pages.map((page) => visibleRectOf(page).width))
   }
 
   // トラックパッドのピンチは ctrl 付きのホイールとして届く。ブラウザ全体が拡大されないよう、ページの表示だけを拡大する
@@ -306,6 +306,12 @@ export default function App() {
     // クリックしただけのときは、何も描かれないと置けたのか分からないので、決まった大きさで置く
     const clicked = rect.width < 4 && rect.height < 4
     const lineBox = clicked ? { x: rect.x, y: rect.y - 12, width: 120, height: 24 } : rect
+    if (tool.kind === 'crop') {
+      if (clicked) return
+      dispatch({ type: 'cropPages', ids: tool.ids.includes(pageId) ? tool.ids : [pageId], rect })
+      setTool({ kind: 'select' })
+      return
+    }
     if (tool.kind === 'rect') {
       dispatch({ type: 'add', annotation: { id, kind: 'rect', pageId, ...lineBox, ...tool.style } })
     } else if (tool.kind === 'link') {
@@ -438,7 +444,9 @@ export default function App() {
   const placingHint =
     tool.kind === 'editText'
       ? '書き換えたい文字の行をクリック'
-      : tool.kind === 'link'
+      : tool.kind === 'crop'
+        ? '残す範囲をドラッグ（選んだページすべてに同じ範囲を掛ける）'
+        : tool.kind === 'link'
         ? 'リンクにする範囲をドラッグ'
         : tool.kind === 'note'
         ? '付箋を貼る場所をクリック'
@@ -567,6 +575,7 @@ export default function App() {
             onJump={jumpToPage}
             onAddFile={chooseInsertPdf}
             onExtract={handleExtract}
+            onCrop={(ids) => setTool({ kind: 'crop', ids })}
             dispatch={dispatch}
           />
         )}
@@ -582,12 +591,13 @@ export default function App() {
                 pageCount={pages.length}
                 pageOptions={pageOptions}
                 pageMarks={history.present.pageMarks}
+                showFullPage={tool.kind === 'crop' && tool.ids.includes(ref.id)}
                 scale={zoom}
                 annotations={annotations.filter((annotation) => annotation.pageId === ref.id)}
                 selectedId={selectedId}
                 editingId={editingId}
                 placing={tool.kind !== 'select'}
-                drawMode={tool.kind === 'rect' || tool.kind === 'redaction' || tool.kind === 'link' || tool.kind === 'markText' || (tool.kind === 'shape' && tool.variant !== 'ink') ? 'box' : tool.kind === 'shape' ? 'ink' : null}
+                drawMode={tool.kind === 'rect' || tool.kind === 'redaction' || tool.kind === 'link' || tool.kind === 'crop' || tool.kind === 'markText' || (tool.kind === 'shape' && tool.variant !== 'ink') ? 'box' : tool.kind === 'shape' ? 'ink' : null}
                 onPlace={handlePlace}
                 onDraw={handleDraw}
                 textMode={tool.kind === 'editText' ? 'pick' : tool.kind === 'markText' ? 'mark' : null}

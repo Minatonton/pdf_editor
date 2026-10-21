@@ -1,13 +1,14 @@
 import type { PDFPageProxy } from 'pdfjs-dist'
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
-import { BLANK_PAGE_FILE, viewSizeOf, type EditorAction, type PageRef } from '../editor/document'
+import { BLANK_PAGE_FILE, viewSizeOf, visibleRectOf, type EditorAction, type PageRef } from '../editor/document'
 
 const THUMBNAIL_WIDTH = 112
 
 function Thumbnail({ page, proxy }: { page: PageRef; proxy: PDFPageProxy }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const size = viewSizeOf(page)
-  const scale = THUMBNAIL_WIDTH / size.width
+  const visible = visibleRectOf(page)
+  const scale = THUMBNAIL_WIDTH / visible.width
 
   useEffect(() => {
     const canvas = canvasRef.current!
@@ -21,7 +22,14 @@ function Thumbnail({ page, proxy }: { page: PageRef; proxy: PDFPageProxy }) {
     return () => task.cancel()
   }, [proxy, page.rotation, scale])
 
-  return <canvas ref={canvasRef} style={{ width: THUMBNAIL_WIDTH, height: size.height * scale }} />
+  return (
+    <div className="thumbnail-clip" style={{ width: THUMBNAIL_WIDTH, height: visible.height * scale }}>
+      <canvas
+        ref={canvasRef}
+        style={{ left: -visible.x * scale, top: -visible.y * scale, width: size.width * scale, height: size.height * scale }}
+      />
+    </div>
+  )
 }
 
 export function PagePanel({
@@ -32,6 +40,7 @@ export function PagePanel({
   onJump,
   onAddFile,
   onExtract,
+  onCrop,
   dispatch,
 }: {
   pages: PageRef[]
@@ -41,6 +50,7 @@ export function PagePanel({
   onJump: (id: string) => void
   onAddFile: (index: number) => void
   onExtract: () => void
+  onCrop: (ids: string[]) => void
   dispatch: (action: EditorAction) => void
 }) {
   // 範囲選択の起点。Shift を押しながら選んだときに、ここから選んだページまでをまとめて選ぶ
@@ -103,6 +113,16 @@ export function PagePanel({
         </button>
         <button disabled={targets.length === 0} onClick={onExtract} title="選んだページだけを別の PDF として保存">
           抽出
+        </button>
+        <button disabled={targets.length === 0} onClick={() => onCrop(targets)} title="選んだページの残す範囲を描いて、余白などを切り落とす">
+          切抜
+        </button>
+        <button
+          disabled={!pages.some((page) => selected.has(page.id) && page.crop)}
+          onClick={() => dispatch({ type: 'cropPages', ids: targets, rect: null })}
+          title="選んだページのトリミングを外して、ページ全体に戻す"
+        >
+          全体
         </button>
       </div>
       <p className="note">{selectedIds.length > 0 ? `${selectedIds.length} ページを選択中` : '⌘ / Shift で複数選べる'}</p>

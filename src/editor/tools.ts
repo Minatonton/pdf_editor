@@ -11,6 +11,8 @@ export type Tool =
   | { kind: 'text' }
   | { kind: 'note' }
   | { kind: 'link' }
+  /** ids のページに、描いた範囲のトリミングをまとめて掛ける */
+  | { kind: 'crop'; ids: string[] }
   | { kind: 'editText' }
   | { kind: 'markText'; mark: TextMark }
   | { kind: 'stamp'; text: string }
