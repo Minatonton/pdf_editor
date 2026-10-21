@@ -53,6 +53,7 @@ export type EditorAction =
   | { type: 'editShape'; id: string; changes: Partial<ShapeStyle> }
   | { type: 'editText'; id: string; changes: Partial<Pick<TextAnnotation, 'text' | 'fontSize' | 'color'>> }
   | { type: 'remove'; id: string }
+  | { type: 'editNote'; id: string; text: string }
   | { type: 'setField'; key: string; value: FieldValue }
   | { type: 'setPageMark'; mark: keyof PageMarks; value: string }
   | { type: 'rotatePages'; ids: string[]; degrees: 90 | -90 }
@@ -85,7 +86,7 @@ function rotateAnnotation(annotation: Annotation, page: PageRef, rotation: Rotat
     const onPaper = viewToPdfPoint(x, y, box, page.rotation)
     return pdfToViewPoint(onPaper.x, onPaper.y, box, rotation)
   }
-  if (annotation.kind === 'text') return { ...annotation, ...keepPoint(annotation.x, annotation.y) }
+  if (annotation.kind === 'text' || annotation.kind === 'note') return { ...annotation, ...keepPoint(annotation.x, annotation.y) }
   const center = keepPoint(annotation.x + annotation.width / 2, annotation.y + annotation.height / 2)
   return { ...annotation, x: center.x - annotation.width / 2, y: center.y - annotation.height / 2 }
 }
@@ -121,7 +122,7 @@ export function editorReducer(history: History, action: EditorAction): History {
       return updateAnnotation(history, action.id, (a) => ({ ...a, x: a.x + action.dx, y: a.y + action.dy }))
     case 'resize':
       return updateAnnotation(history, action.id, (a) =>
-        a.kind === 'text' ? a : { ...a, ...resizeBox(a, action.width, action.height) },
+        a.kind === 'text' || a.kind === 'note' ? a : { ...a, ...resizeBox(a, action.width, action.height) },
       )
     case 'editRect':
       return updateAnnotation(history, action.id, (a) => (a.kind === 'rect' ? { ...a, ...action.changes } : a))
@@ -132,6 +133,11 @@ export function editorReducer(history: History, action: EditorAction): History {
       const edited = { ...present, annotations: present.annotations.map(edit) }
       return typed(history, action.id, edited)
     }
+    case 'editNote':
+      return typed(history, action.id, {
+        ...present,
+        annotations: present.annotations.map((a) => (a.id === action.id && a.kind === 'note' ? { ...a, text: action.text } : a)),
+      })
     case 'setPageMark':
       return typed(history, `mark:${action.mark}`, { ...present, pageMarks: { ...present.pageMarks, [action.mark]: action.value } })
     case 'setField':

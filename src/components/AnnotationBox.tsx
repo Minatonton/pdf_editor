@@ -4,7 +4,7 @@ import { mimeTypeOf } from '../annotations/imageFile'
 import { TEXT_FONT_FAMILY, TEXT_LINE_HEIGHT } from '../annotations/textRaster'
 import { resizeBox } from '../annotations/boxSize'
 import { shapePath } from '../annotations/shapePath'
-import type { Annotation, BoxAnnotation, ImageAnnotation } from '../annotations/types'
+import { NOTE_ICON_SIZE, type Annotation, type BoxAnnotation, type ImageAnnotation } from '../annotations/types'
 
 interface Drag {
   mode: 'move' | 'resize'
@@ -77,7 +77,7 @@ export function AnnotationBox({
     const dx = drag.dx / scale
     const dy = drag.dy / scale
     if (drag.mode === 'move' && (dx !== 0 || dy !== 0)) dispatch({ type: 'move', id: annotation.id, dx, dy })
-    if (drag.mode === 'resize' && annotation.kind !== 'text' && (dx !== 0 || dy !== 0)) {
+    if (drag.mode === 'resize' && annotation.kind !== 'text' && annotation.kind !== 'note' && (dx !== 0 || dy !== 0)) {
       dispatch({ type: 'resize', id: annotation.id, ...resizedBox(annotation, dx, dy) })
     }
     if (drag.mode === 'resize' && annotation.kind === 'text' && dx !== 0) {
@@ -92,6 +92,27 @@ export function AnnotationBox({
     left: (annotation.x + moveX) * scale,
     top: (annotation.y + moveY) * scale,
     pointerEvents: interactive ? 'auto' : 'none',
+  }
+
+  if (annotation.kind === 'note') {
+    return (
+      <div
+        ref={box}
+        className="annotation note"
+        data-selected={selected}
+        title={annotation.text || '付箋'}
+        style={{ ...style, width: NOTE_ICON_SIZE * scale, height: NOTE_ICON_SIZE * scale }}
+        onPointerDown={begin('move')}
+        onPointerMove={handleMove}
+        onPointerUp={handleEnd}
+        onPointerCancel={handleEnd}
+      >
+        <svg viewBox="0 0 20 20" width="100%" height="100%" aria-hidden>
+          <path d="M2 2h16v12h-8l-4 4v-4H2z" fill="#ffd43b" stroke="#a37c00" strokeWidth="1" strokeLinejoin="round" />
+          <path d="M5 6h10M5 9h7" stroke="#a37c00" strokeWidth="1.2" strokeLinecap="round" />
+        </svg>
+      </div>
+    )
   }
 
   if (annotation.kind !== 'text') {

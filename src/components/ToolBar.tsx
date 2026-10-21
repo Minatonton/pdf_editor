@@ -51,6 +51,9 @@ export function ToolBar({
       </Group>
 
       <Group label="コメント">
+        <button aria-pressed={tool.kind === 'note'} onClick={() => toggle({ kind: 'note' })} title="付箋を貼ってコメントを書く。保存すると PDF のコメントになる">
+          付箋
+        </button>
         <select
           value={tool.kind === 'markText' ? tool.mark : ''}
           onChange={(event) =>

@@ -1,9 +1,10 @@
-import { BlendMode, degrees, LineCapStyle, PDFDocument, rgb, type PDFImage, type PDFPage } from 'pdf-lib'
+import { BlendMode, degrees, LineCapStyle, PDFDocument, PDFHexString, PDFString, rgb, type PDFImage, type PDFPage } from 'pdf-lib'
 import { shapePath } from '../annotations/shapePath'
 import { rasterizeText } from '../annotations/textRaster'
+import { NOTE_ICON_SIZE, type NoteAnnotation } from '../annotations/types'
 import { BLANK_PAGE_FILE, fieldKey, viewSizeOf, type EditorDocument, type FieldValue, type PageRef } from '../editor/document'
 import { expandMark, type PageMarks } from '../editor/pageMarks'
-import { placeCenteredInPdf, placeInPdf, viewToPdfPoint, type PageBox, type Point, type ViewRect } from './geometry'
+import { placeCenteredInPdf, placeInPdf, viewToPdfPoint, type PageBox, type Point, type Rotation, type ViewRect } from './geometry'
 import { fillForm } from './fillForm'
 import { removeUnreachableObjects, severDroppedPages } from './prune'
 
@@ -114,6 +115,11 @@ export async function exportPdf(
     // 墨消しの範囲は、ページを画像にしたときにすでに塗ってある
     if (annotation.kind === 'redaction') continue
 
+    if (annotation.kind === 'note') {
+      if (annotation.text.trim() !== '') addNote(pdf, target.page, annotation, box, target.ref.rotation)
+      continue
+    }
+
     if (annotation.kind === 'rect') {
       const placement = placeInPdf(annotation, box, target.ref.rotation)
       target.page.drawRectangle({
@@ -182,6 +188,22 @@ async function drawPageMarks(pdf: PDFDocument, refs: PageRef[], output: PDFPage[
     await draw(marks.header, { x: view.width / 2, y: MARK_MARGIN }, 10, '#333333', 0, 1)
     await draw(marks.footer, { x: view.width / 2, y: view.height - MARK_MARGIN }, 10, '#333333', 0, 1)
   }
+}
+
+/** 付箋は PDF の注釈（Text）として足す。ほかのビューアーでもコメントとして開け、印刷には出ない */
+function addNote(pdf: PDFDocument, page: PDFPage, note: NoteAnnotation, box: PageBox, rotation: Rotation) {
+  const a = viewToPdfPoint(note.x, note.y, box, rotation)
+  const b = viewToPdfPoint(note.x + NOTE_ICON_SIZE, note.y + NOTE_ICON_SIZE, box, rotation)
+  const annotation = pdf.context.obj({
+    Type: 'Annot',
+    Subtype: 'Text',
+    Rect: [Math.min(a.x, b.x), Math.min(a.y, b.y), Math.max(a.x, b.x), Math.max(a.y, b.y)],
+    Contents: PDFHexString.fromText(note.text),
+    Name: 'Comment',
+    C: [1, 0.83, 0.23],
+    M: PDFString.fromDate(new Date()),
+  })
+  page.node.addAnnot(pdf.context.register(annotation))
 }
 
 function hexToRgb(hex: string) {

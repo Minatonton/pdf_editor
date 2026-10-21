@@ -29,7 +29,9 @@ export function SelectionToolbar({
       onPointerDown={(event) => event.stopPropagation()}
       // 入力中のテキストからフォーカスが外れて編集が終わらないよう、ボタンを押してもフォーカスを移さない
       onMouseDown={(event) => {
-        if (!(event.target instanceof HTMLSelectElement || event.target instanceof HTMLInputElement)) event.preventDefault()
+        const target = event.target
+        const field = target instanceof HTMLSelectElement || target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement
+        if (!field) event.preventDefault()
       }}
     >
       {annotation.kind === 'text' && <TextControls annotation={annotation} dispatch={dispatch} />}
@@ -44,6 +46,18 @@ export function SelectionToolbar({
           </button>
         ))}
       {annotation.kind === 'shape' && <ShapeControls annotation={annotation} dispatch={dispatch} />}
+      {annotation.kind === 'note' && (
+        <textarea
+          // 置いた直後にそのまま書き始められるよう、選ぶたびに入力欄へ移す
+          key={annotation.id}
+          autoFocus
+          className="note-input"
+          rows={3}
+          placeholder="コメントを書く"
+          value={annotation.text}
+          onChange={(event) => dispatch({ type: 'editNote', id: annotation.id, text: event.target.value })}
+        />
+      )}
       {annotation.kind === 'redaction' && (
         <span className="toolbar-note" title="このページは保存するときに画像になり、文字の選択や検索はできなくなる">
           保存すると下の内容ごと消える

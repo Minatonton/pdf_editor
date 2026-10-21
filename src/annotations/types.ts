@@ -43,6 +43,17 @@ export interface RedactionAnnotation extends Placed {
   height: number
 }
 
+/**
+ * 付箋。ページに描き込まず、PDF の注釈（Text）として保存するので、Acrobat やプレビューでもコメントとして開ける
+ */
+export interface NoteAnnotation extends Placed {
+  kind: 'note'
+  text: string
+}
+
+/** 付箋の印の大きさ（ポイント）。Acrobat の付箋の印とほぼ同じ */
+export const NOTE_ICON_SIZE = 20
+
 export type ShapeVariant = 'rectangle' | 'ellipse' | 'line' | 'arrow' | 'ink'
 
 /** 線で描くもの。線・矢印・手書きの点は、幅と高さに対する割合（0〜1）で持ち、大きさを変えても形を保つ */
@@ -56,7 +67,7 @@ export interface ShapeAnnotation extends Placed {
   strokeWidth: number
 }
 
-export type Annotation = TextAnnotation | ImageAnnotation | RectAnnotation | ShapeAnnotation | RedactionAnnotation
+export type Annotation = TextAnnotation | ImageAnnotation | RectAnnotation | ShapeAnnotation | RedactionAnnotation | NoteAnnotation
 
 export type BoxAnnotation = ImageAnnotation | RectAnnotation | ShapeAnnotation | RedactionAnnotation
 

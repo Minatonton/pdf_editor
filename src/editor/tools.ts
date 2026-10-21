@@ -9,6 +9,7 @@ export const MARK_COLORS: Record<Exclude<TextMark, 'highlight'>, string> = { und
 export type Tool =
   | { kind: 'select' }
   | { kind: 'text' }
+  | { kind: 'note' }
   | { kind: 'editText' }
   | { kind: 'markText'; mark: TextMark }
   | { kind: 'stamp'; text: string }

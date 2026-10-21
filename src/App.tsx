@@ -5,6 +5,7 @@ import { normalizePoints } from './annotations/shapePath'
 import {
   DEFAULT_SHAPE_STYLE,
   DEFAULT_TEXT_STYLE,
+  NOTE_ICON_SIZE,
   RECT_PRESETS,
   type ShapeStyle,
   type TextStyle,
@@ -204,6 +205,12 @@ export default function App() {
     if (tool.kind === 'text') {
       dispatch({ type: 'add', annotation: { id, kind: 'text', pageId, x, y: lineMiddle, text: '', ...textStyle } })
       setEditingId(id)
+    } else if (tool.kind === 'note') {
+      // 印の左上ではなく真ん中をクリックした点に合わせる。印を指す感覚に合わせるため
+      dispatch({
+        type: 'add',
+        annotation: { id, kind: 'note', pageId, x: x - NOTE_ICON_SIZE / 2, y: y - NOTE_ICON_SIZE / 2, text: '' },
+      })
     } else if (tool.kind === 'stamp') {
       // ✓ などの記号は、チェック欄の真ん中をクリックして置くので、1文字目の中心をクリックした点に合わせる
       const x0 = x - textStyle.fontSize / 2
@@ -369,7 +376,9 @@ export default function App() {
   const placingHint =
     tool.kind === 'editText'
       ? '書き換えたい文字の行をクリック'
-      : tool.kind === 'markText'
+      : tool.kind === 'note'
+        ? '付箋を貼る場所をクリック'
+        : tool.kind === 'markText'
         ? '印を付けたい文字の上をドラッグ（続けて何か所でも付けられる）'
       : tool.kind === 'text'
         ? 'テキストを置く場所をクリック'

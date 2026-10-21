@@ -1,4 +1,4 @@
-import { PDFDocument, PDFName, PDFString, type PDFDict, type PDFObject, type PDFRef } from 'pdf-lib'
+import { PDFArray, PDFDocument, PDFHexString, PDFName, PDFString, type PDFDict, type PDFObject, type PDFRef } from 'pdf-lib'
 import { describe, expect, it } from 'vitest'
 import type { PageRef } from '../editor/document'
 import { NO_PAGE_MARKS } from '../editor/pageMarks'
@@ -247,6 +247,18 @@ describe('exportPdf', () => {
     })
     const saved = await exportPdf([await pdf.save({ useObjectStreams: false })], { pages: [ref(0, 0)], annotations: [], formValues: {}, pageMarks: NO_PAGE_MARKS })
     expect(await containsMarker(saved)).toBe(false)
+  })
+
+  it('付箋は、ほかのビューアーでも開けるよう PDF のコメントの注釈として保存する', async () => {
+    const file = await pdfWithPages([300, 300])
+    const note = { id: 'n', kind: 'note' as const, pageId: '0-0', x: 10, y: 20, text: '確認お願いします' }
+    const saved = await exportPdf([file], { pages: [{ ...ref(0, 0), width: 300, height: 300 }], annotations: [note], formValues: {}, pageMarks: NO_PAGE_MARKS })
+
+    const page = (await PDFDocument.load(saved)).getPage(0)
+    const [annotation] = page.node.Annots()!.asArray().map((r) => page.doc.context.lookup(r) as PDFDict)
+    expect(annotation.get(PDFName.of('Subtype'))).toBe(PDFName.of('Text'))
+    expect((annotation.lookup(PDFName.of('Contents')) as PDFHexString).decodeText()).toBe('確認お願いします')
+    expect(annotation.lookup(PDFName.of('Rect'), PDFArray).asArray().map((n) => n.toString())).toEqual(['10', '260', '30', '280'])
   })
 
   describe('フォームの欄', () => {
