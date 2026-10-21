@@ -15,11 +15,12 @@ import { PageView } from './components/PageView'
 import { PageMarksDialog } from './components/PageMarksDialog'
 import { SignatureDialog, type SignatureKind } from './components/SignatureDialog'
 import { Icon } from './components/Icon'
+import { PageNavigator } from './components/PageNavigator'
 import { QuickTools } from './components/QuickTools'
 import { ToolsPanel } from './components/ToolsPanel'
 import { entryIdOf, type ToolEntry } from './editor/toolCatalog'
 import { MARK_COLORS, type Tool } from './editor/tools'
-import { clampZoom, fitWidthZoom, stepZoom, ZOOM_STEPS } from './editor/zoom'
+import { clampZoom, fitWidthZoom, stepZoom } from './editor/zoom'
 import type { Annotation } from './annotations/types'
 import { EMPTY_HISTORY, editorReducer, fieldKey, viewSizeOf, visibleRectOf, type EditorAction, type PageRef } from './editor/document'
 import { exportPdf } from './pdf/exportPdf'
@@ -64,6 +65,7 @@ export default function App() {
   const [signing, setSigning] = useState(false)
   const [editingMarks, setEditingMarks] = useState(false)
   const [showPages, setShowPages] = useState(true)
+  const [currentPage, setCurrentPage] = useState(0)
   const [error, setError] = useState<string | null>(null)
   /** 写したもの。ブラウザのクリップボードには入れない（画像の中身や署名を外に出さないため） */
   const clipboard = useRef<Annotation | null>(null)
@@ -277,6 +279,16 @@ export default function App() {
   const pageOptions = pages.map((page, i) => ({ id: page.id, label: `${i + 1} ページ` }))
 
   const proxyOf = (ref: PageRef) => files[ref.file]?.pages[ref.index]
+
+  /** 表示している場所の上から3割の高さにかかっているページを、今見ているページとする */
+  const trackCurrentPage = () => {
+    const area = pagesArea.current
+    if (!area) return
+    const line = area.getBoundingClientRect().top + area.clientHeight * 0.3
+    const elements = [...area.querySelectorAll<HTMLElement>('.page')]
+    const index = elements.findIndex((element) => element.getBoundingClientRect().bottom > line)
+    setCurrentPage(Math.max(0, index === -1 ? elements.length - 1 : index))
+  }
 
   const jumpToPage = (id: string) => document.getElementById(`page-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
@@ -497,39 +509,27 @@ export default function App() {
   return (
     <div className="app" onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
       <header className="toolbar">
-        <h1>PDF Editor</h1>
-        <button onClick={chooseOpenPdf}>PDF を開く</button>
-        {pdf && <span className="file-name">{pdf.name}</span>}
-        <span className="spacer" />
-        <button disabled={history.past.length === 0} onClick={() => dispatch({ type: 'undo' })} title="元に戻す（⌘Z）">
-          元に戻す
+        <h1>
+          <span className="app-mark" aria-hidden>
+            <Icon name="pages" size={18} />
+          </span>
+          PDF Editor
+        </h1>
+        <button className="rail-button" onClick={chooseOpenPdf} title="PDF を開く">
+          <Icon name="open" />
         </button>
-        <button disabled={history.future.length === 0} onClick={() => dispatch({ type: 'redo' })} title="やり直す（⌘⇧Z）">
-          やり直す
+        {pdf && <span className="file-tab">{pdf.name}</span>}
+        <span className="spacer" />
+        <button className="rail-button" disabled={history.past.length === 0} onClick={() => dispatch({ type: 'undo' })} title="元に戻す（⌘Z）">
+          <Icon name="undo" />
+        </button>
+        <button className="rail-button" disabled={history.future.length === 0} onClick={() => dispatch({ type: 'redo' })} title="やり直す（⌘⇧Z）">
+          <Icon name="redo" />
         </button>
         <span className="divider" />
-        <button className="icon" disabled={!pdf} onClick={() => setZoom(stepZoom(zoom, -1))} title="縮小（⌘−）">
-          −
-        </button>
-        <select
-          value={ZOOM_STEPS.includes(zoom) ? zoom : 'current'}
-          onChange={(event) => setZoom(event.target.value === 'fit' ? fitWidth() : Number(event.target.value))}
-          disabled={!pdf}
-          aria-label="表示倍率"
-        >
-          {!ZOOM_STEPS.includes(zoom) && <option value="current">{Math.round(zoom * 100)}%</option>}
-          {ZOOM_STEPS.map((value) => (
-            <option key={value} value={value}>
-              {Math.round(value * 100)}%
-            </option>
-          ))}
-          <option value="fit">幅に合わせる</option>
-        </select>
-        <button className="icon" disabled={!pdf} onClick={() => setZoom(stepZoom(zoom, 1))} title="拡大（⌘＋）">
-          ＋
-        </button>
         <button className="primary" disabled={!pdf || busy} onClick={handleExport}>
-          PDF を保存
+          <Icon name="save" size={18} />
+          保存
         </button>
         <input
           ref={pdfInput}
@@ -586,7 +586,7 @@ export default function App() {
         <div className="document-area">
         {pdf && <QuickTools tool={tool} onRun={runEntry} />}
         {placingHint && <div className="placing-hint">{placingHint}（Esc でやめる）</div>}
-        <main className="pages" ref={pagesArea}>
+        <main className="pages" ref={pagesArea} onScroll={trackCurrentPage}>
           {pdf ? (
             pages.map((ref, pageIndex) => (
               <PageView
@@ -631,6 +631,16 @@ export default function App() {
             </div>
           )}
         </main>
+        {pdf && (
+          <PageNavigator
+            current={Math.min(currentPage, pages.length - 1)}
+            total={pages.length}
+            onGo={(index) => jumpToPage(pages[index].id)}
+            zoom={zoom}
+            onZoom={setZoom}
+            onFitWidth={() => setZoom(fitWidth())}
+          />
+        )}
         </div>
         {pdf && showPages && (
           <PagePanel

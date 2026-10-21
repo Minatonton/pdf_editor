@@ -877,3 +877,98 @@ input.form-field[type='radio'] {
   background: var(--surface);
   box-shadow: var(--shadow-float);
 }
+
+/* 上の帯：アプリ名・開いているファイル・元に戻す・保存だけに絞る */
+.toolbar {
+  height: 48px;
+  padding: 0 12px;
+}
+
+.toolbar h1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.app-mark {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: #d7373f;
+  color: #fff;
+}
+
+.file-tab {
+  overflow: hidden;
+  max-width: 320px;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  background: var(--bg-app);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  align-self: flex-end;
+}
+
+.toolbar button.primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 下に浮かせるページ移動と倍率 */
+.page-navigator {
+  position: absolute;
+  z-index: 10;
+  bottom: 20px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  border-radius: 24px;
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
+  transform: translateX(-50%);
+}
+
+.page-navigator .rail-button {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+}
+
+.page-input {
+  width: 40px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  text-align: center;
+}
+
+.page-total {
+  padding: 0 4px;
+  color: var(--sub);
+}
+
+.zoom-value {
+  min-width: 44px;
+  color: var(--sub);
+  text-align: center;
+}
+
+.navigator-divider {
+  width: 1px;
+  height: 20px;
+  margin: 0 6px;
+  background: var(--line);
+}
+
+/* 浮いている操作の下にページの最後が隠れないよう、下の余白を広げる */
+.pages {
+  padding-bottom: 96px;
+}
