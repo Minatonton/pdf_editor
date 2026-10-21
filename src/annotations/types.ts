@@ -33,6 +33,16 @@ export interface RectAnnotation extends Placed {
   opacity: number
 }
 
+/**
+ * 墨消し。保存するとき、このページを画像にしてから範囲を黒く塗り、元の文字や画像をファイルから消す。
+ * 上に黒い四角を重ねるだけでは、下の文字がコピーや検索で読めてしまうため
+ */
+export interface RedactionAnnotation extends Placed {
+  kind: 'redaction'
+  width: number
+  height: number
+}
+
 export type ShapeVariant = 'rectangle' | 'ellipse' | 'line' | 'arrow' | 'ink'
 
 /** 線で描くもの。線・矢印・手書きの点は、幅と高さに対する割合（0〜1）で持ち、大きさを変えても形を保つ */
@@ -46,9 +56,9 @@ export interface ShapeAnnotation extends Placed {
   strokeWidth: number
 }
 
-export type Annotation = TextAnnotation | ImageAnnotation | RectAnnotation | ShapeAnnotation
+export type Annotation = TextAnnotation | ImageAnnotation | RectAnnotation | ShapeAnnotation | RedactionAnnotation
 
-export type BoxAnnotation = ImageAnnotation | RectAnnotation | ShapeAnnotation
+export type BoxAnnotation = ImageAnnotation | RectAnnotation | ShapeAnnotation | RedactionAnnotation
 
 export type TextStyle = Pick<TextAnnotation, 'fontSize' | 'color'>
 

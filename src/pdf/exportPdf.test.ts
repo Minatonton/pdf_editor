@@ -223,4 +223,39 @@ describe('exportPdf', () => {
     expect(await containsMarker(saved)).toBe(false)
     expect(await objectsContaining(saved, 'USED-IMAGE-MARKER')).toBeGreaterThan(0)
   })
+
+  describe('墨消し', () => {
+    // 1×1 の黒い PNG
+    const BLACK_PIXEL = Uint8Array.from(
+      atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='),
+      (c) => c.charCodeAt(0),
+    )
+
+    async function fileWithMarkedPage() {
+      const pdf = await PDFDocument.create()
+      const page = pdf.addPage([100, 200])
+      page.node.set(PDFName.of('Contents'), pdf.context.register(pdf.context.stream('% REDACTED-TEXT-MARKER\n')))
+      return pdf.save({ useObjectStreams: false })
+    }
+
+    const page = { ...ref(0, 0), width: 100, height: 200 }
+    const redaction = { id: 'r', kind: 'redaction' as const, pageId: '0-0', x: 10, y: 10, width: 50, height: 20 }
+
+    it('墨消しのあるページは画像に置き換わり、元の中身はファイルに残らない', async () => {
+      const rasterized: unknown[] = []
+      const saved = await exportPdf([await fileWithMarkedPage()], { pages: [page], annotations: [redaction] }, async (target, rects) => {
+        rasterized.push({ page: target.id, rects })
+        return { bytes: BLACK_PIXEL, format: 'png' }
+      })
+
+      expect(rasterized).toEqual([{ page: '0-0', rects: [redaction] }])
+      const objects = (await PDFDocument.load(saved)).context.enumerateIndirectObjects()
+      expect(objects.some(([, object]) => object.toString().includes('REDACTED-TEXT-MARKER'))).toBe(false)
+      expect((await pagesOf(saved))[0].width).toBe(100)
+    })
+
+    it('画像にする手段がなければ、墨消しのある文書は保存せずにエラーにする', async () => {
+      await expect(exportPdf([await fileWithMarkedPage()], { pages: [page], annotations: [redaction] })).rejects.toThrow()
+    })
+  })
 })

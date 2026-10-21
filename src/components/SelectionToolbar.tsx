@@ -44,6 +44,11 @@ export function SelectionToolbar({
           </button>
         ))}
       {annotation.kind === 'shape' && <ShapeControls annotation={annotation} dispatch={dispatch} />}
+      {annotation.kind === 'redaction' && (
+        <span className="toolbar-note" title="このページは保存するときに画像になり、文字の選択や検索はできなくなる">
+          保存すると下の内容ごと消える
+        </span>
+      )}
       {annotation.kind === 'rect' && (
         <span className="toolbar-note" title="下の文字はファイルに残り、コピーや検索で読める">
           見た目だけ隠す

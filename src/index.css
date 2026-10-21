@@ -539,3 +539,9 @@ button.danger {
   justify-content: flex-end;
   gap: 8px;
 }
+
+/* 保存するまでは、何を消すのか確かめられるよう下を透かし、墨消しの範囲だと分かるよう赤い枠を付ける */
+.annotation.redaction {
+  background: rgb(0 0 0 / 0.7);
+  box-shadow: inset 0 0 0 1px #d6403f;
+}

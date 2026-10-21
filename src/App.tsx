@@ -18,6 +18,7 @@ import { EMPTY_HISTORY, editorReducer, viewSizeOf, type EditorAction, type PageR
 import { exportPdf } from './pdf/exportPdf'
 import { boundsOf, type Point } from './pdf/geometry'
 import { openPdf, pageRefsOf, type OpenedPdf } from './pdf/loadPdf'
+import { rasterizerFor } from './pdf/rasterize'
 
 type Tool =
   | { kind: 'select' }
@@ -26,6 +27,7 @@ type Tool =
   /** width を指定しないときは、画像の画素数から大きさを決める */
   | { kind: 'image'; image: LoadedImage; width?: number }
   | { kind: 'rect'; style: RectStyle }
+  | { kind: 'redaction' }
   | { kind: 'shape'; variant: ShapeVariant }
 
 const ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2]
@@ -250,9 +252,11 @@ export default function App() {
     const rect = boundsOf(points)
     // クリックしただけのときは、何も描かれないと置けたのか分からないので、決まった大きさで置く
     const clicked = rect.width < 4 && rect.height < 4
+    const lineBox = clicked ? { x: rect.x, y: rect.y - 12, width: 120, height: 24 } : rect
     if (tool.kind === 'rect') {
-      const box = clicked ? { x: rect.x, y: rect.y - 12, width: 120, height: 24 } : rect
-      dispatch({ type: 'add', annotation: { id, kind: 'rect', pageId, ...box, ...tool.style } })
+      dispatch({ type: 'add', annotation: { id, kind: 'rect', pageId, ...lineBox, ...tool.style } })
+    } else if (tool.kind === 'redaction') {
+      dispatch({ type: 'add', annotation: { id, kind: 'redaction', pageId, ...lineBox } })
     } else if (tool.kind === 'shape') {
       if (clicked && tool.variant === 'ink') return
       const straight = tool.variant === 'line' || tool.variant === 'arrow'
@@ -275,6 +279,7 @@ export default function App() {
       const bytes = await exportPdf(
         files.map((file) => file.bytes),
         history.present,
+        rasterizerFor(proxyOf),
       )
       downloadPdf(bytes, `${pdf.name.replace(/\.pdf$/i, '')}_edited.pdf`)
     })
@@ -287,6 +292,7 @@ export default function App() {
       const bytes = await exportPdf(
         files.map((file) => file.bytes),
         { pages: pages.filter((page) => ids.has(page.id)), annotations },
+        rasterizerFor(proxyOf),
       )
       downloadPdf(bytes, `${pdf.name.replace(/\.pdf$/i, '')}_${ids.size}pages.pdf`)
     })
@@ -313,6 +319,8 @@ export default function App() {
         ? '画像を置く場所をクリック'
         : tool.kind === 'rect'
           ? '隠したい範囲をドラッグ'
+          : tool.kind === 'redaction'
+            ? '消したい範囲をドラッグ'
           : tool.kind === 'shape'
             ? tool.variant === 'ink'
               ? 'ドラッグして書く'
@@ -384,6 +392,14 @@ export default function App() {
         </button>
         <button disabled={!pdf} onClick={() => setSigning(true)} title="手書きの署名、名前の署名、印鑑を作って置く">
           署名・印鑑
+        </button>
+        <button
+          disabled={!pdf}
+          aria-pressed={tool.kind === 'redaction'}
+          onClick={() => setTool(tool.kind === 'redaction' ? { kind: 'select' } : { kind: 'redaction' })}
+          title="範囲を黒く塗り、保存するときに下の文字や画像をファイルから消す"
+        >
+          墨消し
         </button>
         <span className="divider" />
         <button disabled={history.past.length === 0} onClick={() => dispatch({ type: 'undo' })} title="元に戻す（⌘Z）">
@@ -478,7 +494,7 @@ export default function App() {
                 selectedId={selectedId}
                 editingId={editingId}
                 placing={tool.kind !== 'select'}
-                drawMode={tool.kind === 'rect' || (tool.kind === 'shape' && tool.variant !== 'ink') ? 'box' : tool.kind === 'shape' ? 'ink' : null}
+                drawMode={tool.kind === 'rect' || tool.kind === 'redaction' || (tool.kind === 'shape' && tool.variant !== 'ink') ? 'box' : tool.kind === 'shape' ? 'ink' : null}
                 onPlace={handlePlace}
                 onDraw={handleDraw}
                 onSelect={(id) => {

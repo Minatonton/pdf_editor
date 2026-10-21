@@ -1,7 +1,7 @@
 import { BlendMode, degrees, LineCapStyle, PDFDocument, rgb, type PDFImage, type PDFPage } from 'pdf-lib'
 import { shapePath } from '../annotations/shapePath'
 import { rasterizeText } from '../annotations/textRaster'
-import { BLANK_PAGE_FILE, type EditorDocument, type PageRef } from '../editor/document'
+import { BLANK_PAGE_FILE, viewSizeOf, type EditorDocument, type PageRef } from '../editor/document'
 import { placeInPdf, viewToPdfPoint, type PageBox, type ViewRect } from './geometry'
 import { removeUnreachableObjects, severDroppedPages } from './prune'
 
@@ -13,11 +13,17 @@ import { removeUnreachableObjects, severDroppedPages } from './prune'
  * 土台からページを外しても、そのページの中身はどこからも参照されないままファイルに残り、
  * 削除や抜き出しで取り除いたつもりの内容を読み出せてしまうため。
  */
-async function arrangePages(files: Uint8Array[], pages: PageRef[]): Promise<{ pdf: PDFDocument; output: PDFPage[] }> {
+async function arrangePages(
+  files: Uint8Array[],
+  pages: PageRef[],
+  rasterIds: Set<string>,
+): Promise<{ pdf: PDFDocument; output: PDFPage[] }> {
   const first = await PDFDocument.load(files[0])
+  // 画像に置き換えるページは、元のページを使わないページとして扱う。元のページの中身を一切持ち込まないため
+  const usedRefs = pages.filter((ref) => !rasterIds.has(ref.id))
   const usesEveryPageOfFirst = first
     .getPageIndices()
-    .every((index) => pages.some((ref) => ref.file === 0 && ref.index === index))
+    .every((index) => usedRefs.some((ref) => ref.file === 0 && ref.index === index))
   const pdf = usesEveryPageOfFirst ? first : await PDFDocument.create()
   const reused = new Set<number>()
   const output: PDFPage[] = []
@@ -28,7 +34,7 @@ async function arrangePages(files: Uint8Array[], pages: PageRef[]): Promise<{ pd
     let source = sources.get(file)
     if (!source) {
       source = file === 0 ? first : await PDFDocument.load(files[file])
-      severDroppedPages(source, new Set(pages.filter((ref) => ref.file === file).map((ref) => ref.index)))
+      severDroppedPages(source, new Set(usedRefs.filter((ref) => ref.file === file).map((ref) => ref.index)))
       sources.set(file, source)
     }
     return source
@@ -36,7 +42,7 @@ async function arrangePages(files: Uint8Array[], pages: PageRef[]): Promise<{ pd
 
   for (const ref of pages) {
     let page: PDFPage
-    if (ref.file === BLANK_PAGE_FILE) {
+    if (ref.file === BLANK_PAGE_FILE || rasterIds.has(ref.id)) {
       page = pdf.addPage([ref.width, ref.height])
     } else if (ref.file === 0 && usesEveryPageOfFirst && !reused.has(ref.index)) {
       page = pdf.getPage(ref.index)
@@ -54,17 +60,45 @@ async function arrangePages(files: Uint8Array[], pages: PageRef[]): Promise<{ pd
   return { pdf, output }
 }
 
-export async function exportPdf(files: Uint8Array[], document: EditorDocument): Promise<Uint8Array> {
-  const { pdf, output } = await arrangePages(files, document.pages)
+/** 墨消しのあるページを、範囲を黒く塗った画像にする。描くには pdf.js が要るので、呼び出す側が用意する */
+export type RasterizePage = (page: PageRef, redactions: ViewRect[]) => Promise<{ bytes: Uint8Array; format: 'png' | 'jpeg' }>
+
+export async function exportPdf(
+  files: Uint8Array[],
+  document: EditorDocument,
+  rasterize?: RasterizePage,
+): Promise<Uint8Array> {
+  const redactionsByPage = new Map<string, ViewRect[]>()
+  for (const annotation of document.annotations) {
+    if (annotation.kind !== 'redaction') continue
+    redactionsByPage.set(annotation.pageId, [...(redactionsByPage.get(annotation.pageId) ?? []), annotation])
+  }
+  if (redactionsByPage.size > 0 && !rasterize) throw new Error('墨消しのあるページを画像にする手段がありません')
+
+  const { pdf, output } = await arrangePages(files, document.pages, new Set(redactionsByPage.keys()))
   const pageById = new Map(document.pages.map((ref, i) => [ref.id, { ref, page: output[i] }]))
   // 同じ画像を何か所に置いても、ファイルには1回だけ埋め込む
   const embeddedImages = new Map<Uint8Array, PDFImage>()
+
+  for (const [pageId, redactions] of redactionsByPage) {
+    const target = pageById.get(pageId)
+    if (!target) continue
+    const raster = await rasterize!(target.ref, redactions)
+    const image = await embed(pdf, raster.bytes, raster.format)
+    const crop = target.page.getCropBox()
+    const box: PageBox = { left: crop.x, bottom: crop.y, right: crop.x + crop.width, top: crop.y + crop.height }
+    const placement = placeInPdf({ x: 0, y: 0, ...viewSizeOf(target.ref) }, box, target.ref.rotation)
+    target.page.drawImage(image, { ...placement, rotate: degrees(placement.rotateDegrees) })
+  }
 
   for (const annotation of document.annotations) {
     const target = pageById.get(annotation.pageId)
     if (!target) continue
     const crop = target.page.getCropBox()
     const box: PageBox = { left: crop.x, bottom: crop.y, right: crop.x + crop.width, top: crop.y + crop.height }
+
+    // 墨消しの範囲は、ページを画像にしたときにすでに塗ってある
+    if (annotation.kind === 'redaction') continue
 
     if (annotation.kind === 'rect') {
       const placement = placeInPdf(annotation, box, target.ref.rotation)
