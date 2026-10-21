@@ -6,6 +6,19 @@ export const TEXT_LINE_HEIGHT = 1.4
 /** 印刷しても粗さが目立たない解像度（288dpi 相当） */
 const PIXELS_PER_POINT = 4
 
+/**
+ * 行の上端から基準線までの距離。CSS は行の高さの中にフォントの字面（ascent + descent）を上下中央に置くので、
+ * それと同じ計算をして、画面の表示・保存する画像・元の文字の基準線をそろえる
+ */
+export function baselineOffset(fontSize: number): number {
+  const context = document.createElement('canvas').getContext('2d')!
+  context.font = `${fontSize}px ${TEXT_FONT_FAMILY}`
+  const metrics = context.measureText('あ')
+  const ascent = metrics.fontBoundingBoxAscent
+  const descent = metrics.fontBoundingBoxDescent
+  return (fontSize * TEXT_LINE_HEIGHT - (ascent + descent)) / 2 + ascent
+}
+
 export interface RasterizedText {
   png: Uint8Array
   width: number
@@ -36,8 +49,9 @@ export async function rasterizeText(annotation: Pick<TextAnnotation, 'text' | 'f
   context.scale(PIXELS_PER_POINT, PIXELS_PER_POINT)
   context.font = font
   context.fillStyle = annotation.color
-  context.textBaseline = 'middle'
-  lines.forEach((line, i) => context.fillText(line, 0, (i + 0.5) * lineHeight))
+  context.textBaseline = 'alphabetic'
+  const offset = baselineOffset(annotation.fontSize)
+  lines.forEach((line, i) => context.fillText(line, 0, i * lineHeight + offset))
 
   const blob = await new Promise<Blob>((resolve, reject) =>
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('テキストを画像にできませんでした'))), 'image/png'),

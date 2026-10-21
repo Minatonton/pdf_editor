@@ -545,3 +545,19 @@ button.danger {
   background: rgb(0 0 0 / 0.7);
   box-shadow: inset 0 0 0 1px #d6403f;
 }
+
+.text-line {
+  position: absolute;
+  height: auto;
+  padding: 0;
+  border: 1px dashed rgb(47 111 208 / 0.5);
+  border-radius: 2px;
+  background: transparent;
+  cursor: text;
+}
+
+.text-line:hover {
+  border-style: solid;
+  border-color: var(--accent);
+  background: rgb(47 111 208 / 0.08);
+}

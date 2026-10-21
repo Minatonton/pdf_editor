@@ -70,6 +70,11 @@ describe('元に戻す・やり直す', () => {
     expect(editorReducer(EMPTY_HISTORY, { type: 'redo' })).toBe(EMPTY_HISTORY)
   })
 
+  it('まとめて置いたものは、1回で元に戻る', () => {
+    const history = run({ type: 'addMany', annotations: [text, image] }, { type: 'undo' })
+    expect(history.present.annotations).toEqual([])
+  })
+
   it('同じテキストを続けて書き換えたぶんは、1回で元に戻る', () => {
     const history = run(
       { type: 'add', annotation: text },

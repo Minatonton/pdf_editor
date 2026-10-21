@@ -33,6 +33,8 @@ export interface History {
 export type EditorAction =
   | { type: 'open'; pages: PageRef[] }
   | { type: 'add'; annotation: Annotation }
+  /** 1回の操作として元に戻せるよう、まとめて置く（元の文字の編集では白塗りと打ち直した文字を同時に置く） */
+  | { type: 'addMany'; annotations: Annotation[] }
   | { type: 'move'; id: string; dx: number; dy: number }
   | { type: 'resize'; id: string; width: number; height: number }
   | { type: 'editRect'; id: string; changes: Partial<RectStyle> }
@@ -93,6 +95,8 @@ export function editorReducer(history: History, action: EditorAction): History {
       return { past: [], present: { pages: action.pages, annotations: [] }, future: [] }
     case 'add':
       return commit(history, { ...present, annotations: [...present.annotations, action.annotation] })
+    case 'addMany':
+      return commit(history, { ...present, annotations: [...present.annotations, ...action.annotations] })
     case 'move':
       return updateAnnotation(history, action.id, (a) => ({ ...a, x: a.x + action.dx, y: a.y + action.dy }))
     case 'resize':

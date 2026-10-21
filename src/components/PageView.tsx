@@ -3,6 +3,8 @@ import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from 
 import { viewSizeOf, type EditorAction, type PageRef } from '../editor/document'
 import type { Annotation } from '../annotations/types'
 import { boundsOf, type Point } from '../pdf/geometry'
+import { textLinesOf } from '../pdf/pageText'
+import type { TextRun } from '../pdf/textRuns'
 
 import { AnnotationBox } from './AnnotationBox'
 import { SelectionToolbar } from './SelectionToolbar'
@@ -19,6 +21,8 @@ export function PageView({
   drawMode,
   onPlace,
   onDraw,
+  pickText,
+  onPickText,
   onSelect,
   onEdit,
   onEditEnd,
@@ -38,6 +42,9 @@ export function PageView({
   drawMode: 'box' | 'ink' | null
   onPlace: (pageId: string, x: number, y: number) => void
   onDraw: (pageId: string, points: Point[]) => void
+  /** 元の PDF の文字の行を、クリックして選べるように示す */
+  pickText: boolean
+  onPickText: (pageId: string, line: TextRun) => void
   onSelect: (id: string | null) => void
   onEdit: (id: string) => void
   onEditEnd: () => void
@@ -50,6 +57,18 @@ export function PageView({
   const [drawing, setDrawing] = useState<Point[] | null>(null)
   // 描き終えた直後に続けて届く click を、何もない所のクリック（選択の解除）として扱わないための印
   const justDrew = useRef(false)
+  const [textLines, setTextLines] = useState<TextRun[] | null>(null)
+
+  useEffect(() => {
+    if (!pickText || !proxy) return
+    let cancelled = false
+    void textLinesOf(proxy, page.rotation).then((lines) => {
+      if (!cancelled) setTextLines(lines)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [pickText, proxy, page.rotation])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -72,7 +91,7 @@ export function PageView({
       justDrew.current = false
       return
     }
-    if (event.target !== event.currentTarget || event.button !== 0 || drawMode) return
+    if (event.target !== event.currentTarget || event.button !== 0 || drawMode || pickText) return
     if (!placing) {
       onSelect(null)
       return
@@ -137,6 +156,19 @@ export function PageView({
             }}
           />
         )}
+        {pickText &&
+          textLines?.map((line, i) => (
+            <button
+              key={i}
+              className="text-line"
+              title={line.text}
+              style={{ left: line.x * scale, top: line.y * scale, width: line.width * scale, height: line.height * scale }}
+              onClick={(event) => {
+                event.stopPropagation()
+                onPickText(page.id, line)
+              }}
+            />
+          ))}
         {annotations.map((annotation) => (
           <AnnotationBox
             key={annotation.id}

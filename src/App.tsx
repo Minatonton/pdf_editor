@@ -1,6 +1,6 @@
 import { useEffect, useReducer, useRef, useState, type DragEvent } from 'react'
 import { loadImageFile, type LoadedImage } from './annotations/imageFile'
-import { TEXT_LINE_HEIGHT } from './annotations/textRaster'
+import { baselineOffset, TEXT_LINE_HEIGHT } from './annotations/textRaster'
 import { normalizePoints } from './annotations/shapePath'
 import {
   DEFAULT_SHAPE_STYLE,
@@ -19,10 +19,12 @@ import { exportPdf } from './pdf/exportPdf'
 import { boundsOf, type Point } from './pdf/geometry'
 import { openPdf, pageRefsOf, type OpenedPdf } from './pdf/loadPdf'
 import { rasterizerFor } from './pdf/rasterize'
+import type { TextRun } from './pdf/textRuns'
 
 type Tool =
   | { kind: 'select' }
   | { kind: 'text' }
+  | { kind: 'editText' }
   | { kind: 'stamp'; text: string }
   /** width を指定しないときは、画像の画素数から大きさを決める */
   | { kind: 'image'; image: LoadedImage; width?: number }
@@ -273,6 +275,44 @@ export default function App() {
     if (tool.kind !== 'shape' || tool.variant !== 'ink') setTool({ kind: 'select' })
   }
 
+  /**
+   * 元の文字は書き換えられないので、その行を白塗りで隠し、同じ位置・大きさの文字を置いてすぐ打ち直せるようにする。
+   * フォントは元と同じにはならない
+   */
+  const handlePickText = (pageId: string, line: TextRun) => {
+    const fontSize = Math.round(line.fontSize * 2) / 2
+    const textId = crypto.randomUUID()
+    dispatch({
+      type: 'addMany',
+      annotations: [
+        {
+          id: crypto.randomUUID(),
+          kind: 'rect',
+          pageId,
+          // 文字の端が残らないよう、行の周りを少し広めに隠す
+          x: line.x - 1,
+          y: line.y - 1,
+          width: line.width + 2,
+          height: line.height + 2,
+          ...RECT_PRESETS[0].style,
+        },
+        {
+          id: textId,
+          kind: 'text',
+          pageId,
+          x: line.x,
+          y: line.baseline - baselineOffset(fontSize),
+          text: line.text,
+          fontSize,
+          color: '#111111',
+        },
+      ],
+    })
+    setSelectedId(textId)
+    setEditingId(textId)
+    setTool({ kind: 'select' })
+  }
+
   const handleExport = () => {
     if (!pdf) return
     void run(async () => {
@@ -311,8 +351,10 @@ export default function App() {
   }
 
   const placingHint =
-    tool.kind === 'text'
-      ? 'テキストを置く場所をクリック'
+    tool.kind === 'editText'
+      ? '書き換えたい文字の行をクリック'
+      : tool.kind === 'text'
+        ? 'テキストを置く場所をクリック'
       : tool.kind === 'stamp'
         ? `「${tool.text}」を置く場所をクリック`
       : tool.kind === 'image'
@@ -333,6 +375,14 @@ export default function App() {
         <h1>PDF Editor</h1>
         <button onClick={chooseOpenPdf}>PDF を開く</button>
         <span className="divider" />
+        <button
+          disabled={!pdf}
+          aria-pressed={tool.kind === 'editText'}
+          onClick={() => setTool(tool.kind === 'editText' ? { kind: 'select' } : { kind: 'editText' })}
+          title="元の PDF の文字の行を選んで書き換える。元の行は白塗りで隠し、同じ位置に打ち直す"
+        >
+          文字を編集
+        </button>
         <button
           disabled={!pdf}
           aria-pressed={tool.kind === 'text'}
@@ -497,6 +547,8 @@ export default function App() {
                 drawMode={tool.kind === 'rect' || tool.kind === 'redaction' || (tool.kind === 'shape' && tool.variant !== 'ink') ? 'box' : tool.kind === 'shape' ? 'ink' : null}
                 onPlace={handlePlace}
                 onDraw={handleDraw}
+                pickText={tool.kind === 'editText'}
+                onPickText={handlePickText}
                 onSelect={(id) => {
                   if (id !== editingId) setEditingId(null)
                   setSelectedId(id)
