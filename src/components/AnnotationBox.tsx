@@ -57,8 +57,9 @@ export function AnnotationBox({
   const [drag, setDrag] = useState<Drag | null>(null)
   const box = useRef<HTMLDivElement>(null)
 
-  const begin = (mode: Drag['mode']) => (event: PointerEvent<HTMLElement>) => {
-    if (!interactive || editing || event.button !== 0) return
+  /** whileEditing はつまみから始めたとき。入力中でも、つまみをつかめば入力を終えずに動かせる */
+  const begin = (mode: Drag['mode'], whileEditing = false) => (event: PointerEvent<HTMLElement>) => {
+    if (!interactive || (editing && !whileEditing) || event.button !== 0) return
     event.stopPropagation()
     event.preventDefault()
     onSelect(annotation.id)
@@ -197,6 +198,14 @@ export function AnnotationBox({
         />
       ) : (
         annotation.text || '\u00a0'
+      )}
+      {selected && (
+        // 入力中は文字の上を押すとカーソルの移動になるので、動かすためのつまみを枠の外に出す
+        <span className="move-grip" onPointerDown={begin('move', true)} title="ドラッグして動かす" aria-label="動かす">
+          <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden>
+            {[3, 9].flatMap((x) => [3, 6, 9].map((y) => <circle key={`${x}-${y}`} cx={x} cy={y} r="1.1" fill="currentColor" />))}
+          </svg>
+        </span>
       )}
       {selected && !editing && (
         <span className="resize-handle" onPointerDown={begin('resize')} aria-label="文字の大きさを変える" />

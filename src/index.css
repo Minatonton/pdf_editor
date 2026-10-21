@@ -1084,3 +1084,22 @@ input.form-field[type='radio'] {
   color: var(--ink);
   font-weight: 700;
 }
+
+.move-grip {
+  position: absolute;
+  top: -4px;
+  left: -22px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: #fff;
+  cursor: grab;
+  touch-action: none;
+}
+
+.move-grip:active {
+  cursor: grabbing;
+}
