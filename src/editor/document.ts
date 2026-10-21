@@ -58,6 +58,7 @@ export type EditorAction =
   | { type: 'removeMany'; ids: string[] }
   /** 別のページへ移す。x, y は移した先のページでの位置 */
   | { type: 'moveToPage'; id: string; pageId: string; x: number; y: number }
+  | { type: 'rotate'; id: string; rotation: number }
   | { type: 'resize'; id: string; width: number; height: number }
   | { type: 'editRect'; id: string; changes: Partial<RectStyle> }
   | { type: 'editShape'; id: string; changes: Partial<ShapeStyle> }
@@ -162,6 +163,10 @@ export function editorReducer(history: History, action: EditorAction): History {
         }),
       })
     }
+    case 'rotate':
+      return updateAnnotation(history, action.id, (a) =>
+        a.kind === 'text' || a.kind === 'image' ? { ...a, rotation: action.rotation } : a,
+      )
     case 'moveToPage':
       return updateAnnotation(history, action.id, (a) => ({ ...a, pageId: action.pageId, x: action.x, y: action.y }))
     case 'removeMany': {

@@ -2,13 +2,14 @@ import { useRef, useState, type PointerEvent } from 'react'
 import type { EditorAction } from '../editor/document'
 import { mimeTypeOf } from '../annotations/imageFile'
 import { baselineOffset, TEXT_FONT_FAMILY, TEXT_LINE_HEIGHT } from '../annotations/textRaster'
+import { angleFrom, snapAngle } from '../editor/rotation'
 import type { ViewRect } from '../pdf/geometry'
 import { resizeBox } from '../annotations/boxSize'
 import { shapePath } from '../annotations/shapePath'
 import { NOTE_ICON_SIZE, type Annotation, type BoxAnnotation, type ImageAnnotation } from '../annotations/types'
 
 interface Drag {
-  mode: 'move' | 'resize'
+  mode: 'move' | 'resize' | 'rotate'
   startX: number
   startY: number
   /** 文字の大きさを変えるときの基準。ドラッグを始めたときの見た目の幅 */
@@ -17,6 +18,10 @@ interface Drag {
   /** つかんだときの画面上の位置。別のページで離したとき、そのページでの位置を求めるのに使う */
   startLeft: number
   startTop: number
+  /** 回すときの軸（画面上の中心）と、今の角度 */
+  centerX: number
+  centerY: number
+  angle: number
   dx: number
   dy: number
 }
@@ -88,8 +93,21 @@ export function AnnotationBox({
     onSelect(annotation.id)
     event.currentTarget.setPointerCapture(event.pointerId)
     const { offsetWidth: startWidth, offsetHeight: startHeight } = box.current!
-    const { left: startLeft, top: startTop } = box.current!.getBoundingClientRect()
-    setDrag({ mode, startX: event.clientX, startY: event.clientY, startWidth, startHeight, startLeft, startTop, dx: 0, dy: 0 })
+    const bounds = box.current!.getBoundingClientRect()
+    setDrag({
+      mode,
+      startX: event.clientX,
+      startY: event.clientY,
+      startWidth,
+      startHeight,
+      startLeft: bounds.left,
+      startTop: bounds.top,
+      centerX: bounds.left + bounds.width / 2,
+      centerY: bounds.top + bounds.height / 2,
+      angle: rotationOf(annotation),
+      dx: 0,
+      dy: 0,
+    })
   }
 
   /** 押した位置からのずれ（画面の画素）。動かすときは吸い寄せた分も足す */
@@ -113,6 +131,10 @@ export function AnnotationBox({
 
   const handleMove = (event: PointerEvent<HTMLElement>) => {
     if (!drag) return
+    if (drag.mode === 'rotate') {
+      setDrag({ ...drag, angle: angleOf(drag, event) })
+      return
+    }
     const delta = deltaOf(drag, event)
     if (drag.mode === 'move') onGroupDrag?.(delta)
     setDrag({ ...drag, ...delta })
@@ -121,6 +143,12 @@ export function AnnotationBox({
   // 離した位置は、最後の描画を待たずにこのイベントから取る。素早く動かすと描画が追いつかず、ずれて置かれるため
   const handleEnd = (event: PointerEvent<HTMLElement>) => {
     if (!drag) return
+    if (drag.mode === 'rotate') {
+      const angle = angleOf(drag, event)
+      if (angle !== rotationOf(annotation)) dispatch({ type: 'rotate', id: annotation.id, rotation: angle })
+      setDrag(null)
+      return
+    }
     const final = { ...drag, ...deltaOf(drag, event) }
     onSnapEnd()
     const dx = final.dx / scale
@@ -156,7 +184,11 @@ export function AnnotationBox({
     left: (annotation.x + moveX) * scale,
     top: (annotation.y + moveY) * scale,
     pointerEvents: interactive ? 'auto' : 'none',
+    transform: `rotate(${drag?.mode === 'rotate' ? drag.angle : rotationOf(annotation)}deg)`,
   }
+  const rotateHandle = selected && !editing && (annotation.kind === 'text' || annotation.kind === 'image') && (
+    <span className="rotate-handle" onPointerDown={begin('rotate')} title="ドラッグして回す（Shift で 15° ずつ）" aria-label="回す" />
+  )
 
   if (annotation.kind === 'note') {
     return (
@@ -224,6 +256,7 @@ export function AnnotationBox({
           </svg>
         )}
         {selected && <span className="resize-handle" onPointerDown={begin('resize')} aria-label="大きさを変える" />}
+        {rotateHandle}
       </div>
     )
   }
@@ -277,8 +310,17 @@ export function AnnotationBox({
       {selected && !editing && (
         <span className="resize-handle" onPointerDown={begin('resize')} aria-label="文字の大きさを変える" />
       )}
+      {rotateHandle}
     </div>
   )
+}
+
+function rotationOf(annotation: Annotation): number {
+  return annotation.kind === 'text' || annotation.kind === 'image' ? (annotation.rotation ?? 0) : 0
+}
+
+function angleOf(drag: Drag, event: PointerEvent<HTMLElement>): number {
+  return snapAngle(angleFrom({ x: drag.centerX, y: drag.centerY }, { x: event.clientX, y: event.clientY }), event.shiftKey)
 }
 
 /** 指の下にある、自分とは別のページ */

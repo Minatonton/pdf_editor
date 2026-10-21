@@ -165,7 +165,9 @@ export async function exportPdf(
       rect = { x: annotation.x, y: annotation.y, width: raster.width, height: raster.height }
     }
 
-    const placement = placeInPdf(rect, box, target.ref.rotation)
+    // 回したものは中心を軸に回す。画面の回転は時計回り、PDF は反時計回りなので向きを逆にして渡す
+    const center = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
+    const placement = placeCenteredInPdf(center, rect.width, rect.height, -(annotation.rotation ?? 0), box, target.ref.rotation)
     target.page.drawImage(image, { ...placement, rotate: degrees(placement.rotateDegrees) })
   }
 

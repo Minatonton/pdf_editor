@@ -55,6 +55,17 @@ describe('配置した要素の編集', () => {
     expect(present.annotations[0]).toMatchObject({ pageId: 'p2', x: 40, y: 50 })
   })
 
+  it('テキストと画像は回せ、ほかのものは回らない', () => {
+    const rect: RectAnnotation = { id: 'r', kind: 'rect', pageId: 'p1', x: 0, y: 0, width: 10, height: 10, color: '#fff', opacity: 1 }
+    const { present } = run(
+      { type: 'addMany', annotations: [text, image, rect] },
+      { type: 'rotate', id: 't', rotation: 30 },
+      { type: 'rotate', id: 'i', rotation: 90 },
+      { type: 'rotate', id: 'r', rotation: 45 },
+    )
+    expect(present.annotations.map((a) => ('rotation' in a ? a.rotation : undefined))).toEqual([30, 90, undefined])
+  })
+
   it('選んだものをまとめて消せる', () => {
     const { present } = run({ type: 'addMany', annotations: [text, image] }, { type: 'removeMany', ids: ['t', 'i'] })
     expect(present.annotations).toEqual([])

@@ -1,4 +1,4 @@
-import { PDFArray, PDFDict, PDFDocument, PDFHexString, PDFName, PDFString, type PDFObject, type PDFRef } from 'pdf-lib'
+import { decodePDFRawStream, PDFArray, PDFDict, PDFDocument, PDFRawStream, PDFHexString, PDFName, PDFString, type PDFObject, type PDFRef } from 'pdf-lib'
 import { describe, expect, it } from 'vitest'
 import type { PageRef } from '../editor/document'
 import { NO_PAGE_MARKS } from '../editor/pageMarks'
@@ -268,6 +268,25 @@ describe('exportPdf', () => {
     const saved = await exportPdf([file], { pages: [page], annotations: [], formValues: {}, pageMarks: NO_PAGE_MARKS })
     const box = (await PDFDocument.load(saved)).getPage(0).getCropBox()
     expect(box).toEqual({ x: 50, y: 100, width: 200, height: 250 })
+  })
+
+  it('回した画像は、中心を軸に回して置く', async () => {
+    const file = await pdfWithPages([300, 300])
+    const BLACK_PIXEL = Uint8Array.from(
+      atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='),
+      (c) => c.charCodeAt(0),
+    )
+    const image = { id: 'i', kind: 'image' as const, pageId: '0-0', x: 100, y: 100, width: 40, height: 20, bytes: BLACK_PIXEL, format: 'png' as const, rotation: 90 }
+    const saved = await exportPdf([file], { pages: [{ ...ref(0, 0), width: 300, height: 300 }], annotations: [image], formValues: {}, pageMarks: NO_PAGE_MARKS })
+    const page = (await PDFDocument.load(saved)).getPage(0)
+    const contents = page.node.Contents()!
+    const streams = contents instanceof PDFArray ? contents.asArray().map((r) => page.doc.context.lookup(r)) : [contents]
+    const content = streams.map((stream) => new TextDecoder().decode(decodePDFRawStream(stream as PDFRawStream).decode())).join('\n')
+    // 時計回りに 90 度 = PDF では -90 度。中心 (120, 190) を軸にするので、左下の角は (110, 210) に来る
+    expect(content).toMatch(/1 0 0 1 110 210 cm/)
+    // 回転の行列（cos, sin, -sin, cos）が、-90 度の (0, -1, 1, 0) になっている
+    const [a, b, c, d] = content.match(/1 0 0 1 110 210 cm\n(\S+) (\S+) (\S+) (\S+) 0 0 cm/)!.slice(1).map(Number)
+    expect([a, b, c, d].map((n) => Math.round(n))).toEqual([0, -1, 1, 0])
   })
 
   describe('リンク', () => {

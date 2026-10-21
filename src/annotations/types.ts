@@ -11,6 +11,8 @@ export interface TextAnnotation extends Placed {
   text: string
   fontSize: number
   color: string
+  /** 中心を軸に時計回りに回した角度（度）。回していなければ持たない */
+  rotation?: number
 }
 
 export interface ImageAnnotation extends Placed {
@@ -19,6 +21,8 @@ export interface ImageAnnotation extends Placed {
   height: number
   bytes: Uint8Array
   format: 'png' | 'jpeg'
+  /** 中心を軸に時計回りに回した角度（度）。回していなければ持たない */
+  rotation?: number
 }
 
 /**
