@@ -1,26 +1,30 @@
 /*
- * 主役は白い紙のページなので、周りはそれより一段暗い灰色にしてページの縁を見せる。
- * 色を持つのは、選択中の枠と主ボタンの青だけにして、PDF の中身の色と混ざらないようにしている。
+ * 書類を編集する定番のアプリ（Acrobat）の画面に近づけ、初めてでも迷わないようにしている。
+ * 枠は白、書類を置く作業面は薄い灰色にして、白い紙のページの縁を見せる。
+ * 色を持つのは、選択中のものと主ボタンの青だけ。PDF の中身の色と混ざらないようにするため。
  */
 :root {
-  --ink: #1d2025;
-  --sub: #5b616b;
-  --muted: #8a909a;
-  --line: #d9dce1;
+  --ink: #2c2c2c;
+  --sub: #6e6e6e;
+  --muted: #959595;
+  --line: #e1e1e1;
+  --line-strong: #cacaca;
   --surface: #ffffff;
-  --hover: #f1f3f5;
-  --bg-app: #e6e8eb;
-  --accent: #2f6fd0;
-  --accent-hover: #255cb0;
+  --hover: #f0f0f0;
+  --pressed: #e6e6e6;
+  --bg-app: #ededed;
+  --accent: #1473e6;
+  --accent-hover: #0d66d0;
   --on-accent: #ffffff;
-  --accent-soft: #e5eefb;
-  --danger: #c93a32;
-  --radius-sm: 6px;
-  --radius-md: 10px;
+  --accent-soft: #e5f0fd;
+  --danger: #d7373f;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --shadow-float: 0 1px 4px rgb(0 0 0 / 0.15), 0 4px 16px rgb(0 0 0 / 0.08);
 
   font-family: 'Noto Sans JP', system-ui, -apple-system, 'Hiragino Kaku Gothic ProN', sans-serif;
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: 13px;
+  line-height: 1.5;
   color: var(--ink);
   background: var(--bg-app);
 }
@@ -67,7 +71,10 @@ button[aria-pressed='true'] {
   color: var(--accent);
 }
 
+/* 主ボタンは丸みの強い形にして、ほかのボタンと見分けやすくする */
 button.primary {
+  border-radius: 16px;
+  padding: 0 16px;
   border-color: var(--accent);
   background: var(--accent);
   color: var(--on-accent);
