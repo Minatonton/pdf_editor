@@ -71,6 +71,34 @@ export function placeInPdf(rect: ViewRect, box: PageBox, rotation: Rotation): Pd
   return { x: anchor.x, y: anchor.y, width: rect.width, height: rect.height, rotateDegrees: rotation }
 }
 
+/**
+ * 画面上の中心の位置に、幅 width・高さ height のものを、画面に対して反時計回りに tilt 度傾けて置く配置。
+ * drawImage は左下の角を軸に回すので、回したあとの中心が狙った位置に来るよう、左下の角をずらす
+ */
+export function placeCenteredInPdf(
+  center: Point,
+  width: number,
+  height: number,
+  tilt: number,
+  box: PageBox,
+  rotation: Rotation,
+): PdfPlacement {
+  const c = viewToPdfPoint(center.x, center.y, box, rotation)
+  const degrees = rotation + tilt
+  const radians = (degrees * Math.PI) / 180
+  const cos = Math.cos(radians)
+  const sin = Math.sin(radians)
+  const halfW = width / 2
+  const halfH = height / 2
+  return {
+    x: c.x - (halfW * cos - halfH * sin),
+    y: c.y - (halfW * sin + halfH * cos),
+    width,
+    height,
+    rotateDegrees: degrees,
+  }
+}
+
 export interface Point {
   x: number
   y: number

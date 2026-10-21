@@ -2,7 +2,8 @@ import { BlendMode, degrees, LineCapStyle, PDFDocument, rgb, type PDFImage, type
 import { shapePath } from '../annotations/shapePath'
 import { rasterizeText } from '../annotations/textRaster'
 import { BLANK_PAGE_FILE, fieldKey, viewSizeOf, type EditorDocument, type FieldValue, type PageRef } from '../editor/document'
-import { placeInPdf, viewToPdfPoint, type PageBox, type ViewRect } from './geometry'
+import { expandMark, type PageMarks } from '../editor/pageMarks'
+import { placeCenteredInPdf, placeInPdf, viewToPdfPoint, type PageBox, type Point, type ViewRect } from './geometry'
 import { fillForm } from './fillForm'
 import { removeUnreachableObjects, severDroppedPages } from './prune'
 
@@ -155,7 +156,32 @@ export async function exportPdf(
     target.page.drawImage(image, { ...placement, rotate: degrees(placement.rotateDegrees) })
   }
 
+  await drawPageMarks(pdf, document.pages, output, document.pageMarks)
   return pdf.save()
+}
+
+/** 透かしは紙の大きさに合わせて大きく薄く、ヘッダー・フッターは上下の余白の真ん中に小さく入れる */
+const MARK_MARGIN = 24
+
+async function drawPageMarks(pdf: PDFDocument, refs: PageRef[], output: PDFPage[], marks: PageMarks) {
+  const total = refs.length
+  for (const [i, page] of output.entries()) {
+    const ref = refs[i]
+    const view = viewSizeOf(ref)
+    const crop = page.getCropBox()
+    const box: PageBox = { left: crop.x, bottom: crop.y, right: crop.x + crop.width, top: crop.y + crop.height }
+    const draw = async (template: string, center: Point, fontSize: number, color: string, tilt: number, opacity: number) => {
+      const text = expandMark(template, i + 1, total)
+      if (text.trim() === '') return
+      const raster = await rasterizeText({ text, fontSize, color })
+      const image = await pdf.embedPng(raster.png)
+      const placement = placeCenteredInPdf(center, raster.width, raster.height, tilt, box, ref.rotation)
+      page.drawImage(image, { ...placement, rotate: degrees(placement.rotateDegrees), opacity })
+    }
+    await draw(marks.watermark, { x: view.width / 2, y: view.height / 2 }, Math.min(view.width, view.height) / 8, '#808080', 45, 0.25)
+    await draw(marks.header, { x: view.width / 2, y: MARK_MARGIN }, 10, '#333333', 0, 1)
+    await draw(marks.footer, { x: view.width / 2, y: view.height - MARK_MARGIN }, 10, '#333333', 0, 1)
+  }
 }
 
 function hexToRgb(hex: string) {

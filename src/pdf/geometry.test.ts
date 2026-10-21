@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeRotation, pdfToViewPoint, placeInPdf, viewSize, viewToPdfPoint, type PageBox } from './geometry'
+import {
+  normalizeRotation,
+  pdfToViewPoint,
+  placeCenteredInPdf,
+  placeInPdf,
+  viewSize,
+  viewToPdfPoint,
+  type PageBox,
+} from './geometry'
 
 const A4: PageBox = { left: 0, bottom: 0, right: 595, top: 842 }
 
@@ -74,5 +82,24 @@ describe('placeInPdf', () => {
       height: 80,
       rotateDegrees: 90,
     })
+  })
+})
+
+describe('placeCenteredInPdf', () => {
+  it.each([0, 90, 180, 270] as const)('傾けないときは、中心が同じ箱を置く %i 度の配置と一致する', (rotation) => {
+    const centered = placeCenteredInPdf({ x: 150, y: 140 }, 200, 80, 0, A4, rotation)
+    const expected = placeInPdf({ x: 50, y: 100, width: 200, height: 80 }, A4, rotation)
+    expect(centered.x).toBeCloseTo(expected.x)
+    expect(centered.y).toBeCloseTo(expected.y)
+    expect(centered.rotateDegrees).toBe(expected.rotateDegrees)
+  })
+
+  it('傾けても、回したあとの中心は狙った位置に来る', () => {
+    const placed = placeCenteredInPdf({ x: 297.5, y: 421 }, 300, 60, 45, A4, 0)
+    const radians = (45 * Math.PI) / 180
+    const centerX = placed.x + 150 * Math.cos(radians) - 30 * Math.sin(radians)
+    const centerY = placed.y + 150 * Math.sin(radians) + 30 * Math.cos(radians)
+    expect(centerX).toBeCloseTo(297.5)
+    expect(centerY).toBeCloseTo(421)
   })
 })

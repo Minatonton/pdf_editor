@@ -1,5 +1,6 @@
 import { resizeBox } from '../annotations/boxSize'
 import type { Annotation, RectStyle, ShapeStyle, TextAnnotation } from '../annotations/types'
+import { NO_PAGE_MARKS, type PageMarks } from './pageMarks'
 import { normalizeRotation, pdfToViewPoint, viewToPdfPoint, type PageBox, type Rotation } from '../pdf/geometry'
 
 /** 保存する PDF の1ページ。どのファイルの何ページ目を、どの向きで使うか */
@@ -25,6 +26,8 @@ export interface EditorDocument {
   annotations: Annotation[]
   /** 欄の名前は同じ文書の中でしか一意でないので、ファイル番号と組にした fieldKey で引く */
   formValues: Record<string, FieldValue>
+  /** 透かし・ヘッダー・フッター。保存するときに全ページへ入れる */
+  pageMarks: PageMarks
 }
 
 export function fieldKey(file: number, name: string): string {
@@ -51,6 +54,7 @@ export type EditorAction =
   | { type: 'editText'; id: string; changes: Partial<Pick<TextAnnotation, 'text' | 'fontSize' | 'color'>> }
   | { type: 'remove'; id: string }
   | { type: 'setField'; key: string; value: FieldValue }
+  | { type: 'setPageMark'; mark: keyof PageMarks; value: string }
   | { type: 'rotatePages'; ids: string[]; degrees: 90 | -90 }
   | { type: 'removePages'; ids: string[] }
   /** ids のページを、残りのページの並びで index の位置に移す（ids の順番は今の並び順を保つ） */
@@ -59,7 +63,7 @@ export type EditorAction =
   | { type: 'undo' }
   | { type: 'redo' }
 
-export const EMPTY_HISTORY: History = { past: [], present: { pages: [], annotations: [], formValues: {} }, future: [] }
+export const EMPTY_HISTORY: History = { past: [], present: { pages: [], annotations: [], formValues: {}, pageMarks: NO_PAGE_MARKS }, future: [] }
 
 export function viewSizeOf(page: PageRef): { width: number; height: number } {
   const turned = page.rotation === 90 || page.rotation === 270
@@ -108,7 +112,7 @@ export function editorReducer(history: History, action: EditorAction): History {
   const { present } = history
   switch (action.type) {
     case 'open':
-      return { past: [], present: { pages: action.pages, annotations: [], formValues: {} }, future: [] }
+      return { past: [], present: { pages: action.pages, annotations: [], formValues: {}, pageMarks: NO_PAGE_MARKS }, future: [] }
     case 'add':
       return commit(history, { ...present, annotations: [...present.annotations, action.annotation] })
     case 'addMany':
@@ -128,6 +132,8 @@ export function editorReducer(history: History, action: EditorAction): History {
       const edited = { ...present, annotations: present.annotations.map(edit) }
       return typed(history, action.id, edited)
     }
+    case 'setPageMark':
+      return typed(history, `mark:${action.mark}`, { ...present, pageMarks: { ...present.pageMarks, [action.mark]: action.value } })
     case 'setField':
       return typed(history, `field:${action.key}`, {
         ...present,
