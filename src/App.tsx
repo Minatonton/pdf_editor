@@ -14,6 +14,7 @@ import { PagePanel } from './components/PagePanel'
 import { PageView } from './components/PageView'
 import { PageMarksDialog } from './components/PageMarksDialog'
 import { SignatureDialog, type SignatureKind } from './components/SignatureDialog'
+import { Icon } from './components/Icon'
 import { ToolsPanel } from './components/ToolsPanel'
 import { entryIdOf, type ToolEntry } from './editor/toolCatalog'
 import { MARK_COLORS, type Tool } from './editor/tools'
@@ -581,19 +582,7 @@ export default function App() {
 
       <div className="workspace">
         {pdf && <ToolsPanel tool={tool} onRun={runEntry} />}
-        {pdf && showPages && (
-          <PagePanel
-            pages={pages}
-            proxyOf={proxyOf}
-            selectedIds={selectedPageIds}
-            onSelect={setSelectedPageIds}
-            onJump={jumpToPage}
-            onAddFile={chooseInsertPdf}
-            onExtract={handleExtract}
-            onCrop={(ids) => setTool({ kind: 'crop', ids })}
-            dispatch={dispatch}
-          />
-        )}
+        <div className="document-area">
         {placingHint && <div className="placing-hint">{placingHint}（Esc でやめる）</div>}
         <main className="pages" ref={pagesArea}>
           {pdf ? (
@@ -640,6 +629,28 @@ export default function App() {
             </div>
           )}
         </main>
+        </div>
+        {pdf && showPages && (
+          <PagePanel
+            pages={pages}
+            proxyOf={proxyOf}
+            selectedIds={selectedPageIds}
+            onSelect={setSelectedPageIds}
+            onJump={jumpToPage}
+            onAddFile={chooseInsertPdf}
+            onExtract={handleExtract}
+            onCrop={(ids) => setTool({ kind: 'crop', ids })}
+            onClose={() => setShowPages(false)}
+            dispatch={dispatch}
+          />
+        )}
+        {pdf && (
+          <nav className="side-rail" aria-label="パネル">
+            <button className="rail-button" aria-pressed={showPages} onClick={() => setShowPages(!showPages)} title="ページの一覧">
+              <Icon name="pages" />
+            </button>
+          </nav>
+        )}
       </div>
     </div>
   )

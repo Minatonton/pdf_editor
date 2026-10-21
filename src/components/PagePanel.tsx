@@ -1,5 +1,6 @@
 import type { PDFPageProxy } from 'pdfjs-dist'
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
+import { Icon, type IconName } from './Icon'
 import { BLANK_PAGE_FILE, viewSizeOf, visibleRectOf, type EditorAction, type PageRef } from '../editor/document'
 
 const THUMBNAIL_WIDTH = 112
@@ -32,6 +33,26 @@ function Thumbnail({ page, proxy }: { page: PageRef; proxy: PDFPageProxy }) {
   )
 }
 
+function ActionButton({
+  icon,
+  title,
+  disabled,
+  danger,
+  onClick,
+}: {
+  icon: IconName
+  title: string
+  disabled?: boolean
+  danger?: boolean
+  onClick: () => void
+}) {
+  return (
+    <button className="rail-button" data-danger={danger} disabled={disabled} onClick={onClick} title={title} aria-label={title}>
+      <Icon name={icon} />
+    </button>
+  )
+}
+
 export function PagePanel({
   pages,
   proxyOf,
@@ -41,6 +62,7 @@ export function PagePanel({
   onAddFile,
   onExtract,
   onCrop,
+  onClose,
   dispatch,
 }: {
   pages: PageRef[]
@@ -51,6 +73,7 @@ export function PagePanel({
   onAddFile: (index: number) => void
   onExtract: () => void
   onCrop: (ids: string[]) => void
+  onClose: () => void
   dispatch: (action: EditorAction) => void
 }) {
   // 範囲選択の起点。Shift を押しながら選んだときに、ここから選んだページまでをまとめて選ぶ
@@ -87,43 +110,35 @@ export function PagePanel({
 
   return (
     <nav className="page-panel" aria-label="ページ">
-      <div className="page-actions">
-        <button disabled={targets.length === 0} onClick={() => dispatch({ type: 'rotatePages', ids: targets, degrees: -90 })} title="左に回す">
-          ↺
+      <div className="panel-header">
+        <h2>ページ</h2>
+        <button className="rail-button" onClick={onClose} title="ページの一覧を閉じる">
+          <Icon name="close" size={18} />
         </button>
-        <button disabled={targets.length === 0} onClick={() => dispatch({ type: 'rotatePages', ids: targets, degrees: 90 })} title="右に回す">
-          ↻
-        </button>
-        <button
-          className="danger"
+      </div>
+      <div className="page-actions" role="toolbar" aria-label="ページの操作">
+        <ActionButton icon="rotateLeft" title="左に回す" disabled={targets.length === 0} onClick={() => dispatch({ type: 'rotatePages', ids: targets, degrees: -90 })} />
+        <ActionButton icon="rotateRight" title="右に回す" disabled={targets.length === 0} onClick={() => dispatch({ type: 'rotatePages', ids: targets, degrees: 90 })} />
+        <ActionButton
+          icon="trash"
+          title="選んだページを削除"
+          danger
           disabled={targets.length === 0 || targets.length === pages.length}
           onClick={() => {
             dispatch({ type: 'removePages', ids: targets })
             onSelect([])
           }}
-          title="選んだページを削除"
-        >
-          削除
-        </button>
-        <button onClick={insertBlank} title="選んだページの後ろに白紙のページを入れる">
-          白紙
-        </button>
-        <button onClick={() => onAddFile(insertIndex)} title="別の PDF のページを、選んだページの後ろに入れる">
-          追加
-        </button>
-        <button disabled={targets.length === 0} onClick={onExtract} title="選んだページだけを別の PDF として保存">
-          抽出
-        </button>
-        <button disabled={targets.length === 0} onClick={() => onCrop(targets)} title="選んだページの残す範囲を描いて、余白などを切り落とす">
-          切抜
-        </button>
-        <button
+        />
+        <ActionButton icon="blankPage" title="選んだページの後ろに白紙のページを入れる" onClick={insertBlank} />
+        <ActionButton icon="insertFile" title="別の PDF のページを、選んだページの後ろに入れる" onClick={() => onAddFile(insertIndex)} />
+        <ActionButton icon="extract" title="選んだページだけを別の PDF として保存" disabled={targets.length === 0} onClick={onExtract} />
+        <ActionButton icon="crop" title="選んだページの残す範囲を描いて、余白などを切り落とす" disabled={targets.length === 0} onClick={() => onCrop(targets)} />
+        <ActionButton
+          icon="uncrop"
+          title="選んだページのトリミングを外して、ページ全体に戻す"
           disabled={!pages.some((page) => selected.has(page.id) && page.crop)}
           onClick={() => dispatch({ type: 'cropPages', ids: targets, rect: null })}
-          title="選んだページのトリミングを外して、ページ全体に戻す"
-        >
-          全体
-        </button>
+        />
       </div>
       <p className="note">{selectedIds.length > 0 ? `${selectedIds.length} ページを選択中` : '⌘ / Shift で複数選べる'}</p>
       <ol
