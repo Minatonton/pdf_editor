@@ -2,6 +2,7 @@ import { whiteToTransparent } from '../annotations/imageFile'
 import { safeLinkUrl } from '../annotations/linkUrl'
 import { RECT_PRESETS, type Annotation, type LinkAnnotation } from '../annotations/types'
 import type { EditorAction } from '../editor/document'
+import { Icon } from './Icon'
 
 const FONT_SIZES = [8, 10, 12, 14, 16, 20, 24, 32, 40, 48, 64, 72]
 const COLORS = ['#111111', '#d6403f', '#2f6fd0', '#2f9e5b']
@@ -21,9 +22,12 @@ export function SelectionToolbar({
   dispatch: (action: EditorAction) => void
 }) {
   const remove = (
-    <button className="icon danger" onClick={onRemove} title="削除（Delete）">
-      削除
-    </button>
+    <>
+      <span className="toolbar-divider" />
+      <button className="rail-button" data-danger onClick={onRemove} title="削除（Delete）" aria-label="削除">
+        <Icon name="trash" size={18} />
+      </button>
+    </>
   )
 
   return (

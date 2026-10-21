@@ -302,11 +302,10 @@ button.danger {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 4px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  padding: 4px 6px;
+  border-radius: var(--radius-md);
   background: var(--surface);
-  box-shadow: 0 2px 8px rgb(0 0 0 / 0.15);
+  box-shadow: var(--shadow-float);
   transform: translateY(calc(-100% - 8px));
   white-space: nowrap;
 }
@@ -981,4 +980,16 @@ input.form-field[type='radio'] {
 .thumbnails li[data-current='true']:not([data-selected='true']) .thumbnail-clip,
 .thumbnails li[data-current='true']:not([data-selected='true']) .blank-thumbnail {
   outline: 1px solid var(--accent);
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 20px;
+  margin: 0 2px;
+  background: var(--line);
+}
+
+.selection-toolbar .rail-button {
+  width: 30px;
+  height: 30px;
 }
