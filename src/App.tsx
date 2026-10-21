@@ -16,6 +16,7 @@ import { PageMarksDialog } from './components/PageMarksDialog'
 import { SignatureDialog, type SignatureKind } from './components/SignatureDialog'
 import { ToolBar } from './components/ToolBar'
 import { MARK_COLORS, type Tool } from './editor/tools'
+import type { Annotation } from './annotations/types'
 import { EMPTY_HISTORY, editorReducer, fieldKey, viewSizeOf, type EditorAction, type PageRef } from './editor/document'
 import { exportPdf } from './pdf/exportPdf'
 import { boundsOf, type Point } from './pdf/geometry'
@@ -28,6 +29,7 @@ const ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2]
 const POINTS_PER_PIXEL = 72 / 96
 const SIGNATURE_WIDTH = 150
 const SEAL_WIDTH = 42
+const PASTE_OFFSET = 10
 
 function isEditingField(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
@@ -59,6 +61,8 @@ export default function App() {
   const [signing, setSigning] = useState(false)
   const [editingMarks, setEditingMarks] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /** 写したもの。ブラウザのクリップボードには入れない（画像の中身や署名を外に出さないため） */
+  const clipboard = useRef<Annotation | null>(null)
   const pdfInput = useRef<HTMLInputElement>(null)
   const imageInput = useRef<HTMLInputElement>(null)
 
@@ -93,6 +97,14 @@ export default function App() {
     setEditingId(null)
   }
 
+  const paste = (source: Annotation) => {
+    // 写したページが削除されていたら、置き場所がないので貼らない
+    if (!pages.some((page) => page.id === source.pageId)) return
+    const id = crypto.randomUUID()
+    dispatch({ type: 'add', annotation: { ...source, id } })
+    setSelectedId(id)
+  }
+
   const removeAnnotation = (id: string) => {
     dispatch({ type: 'remove', id })
     setSelectedId(null)
@@ -114,6 +126,24 @@ export default function App() {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') {
         event.preventDefault()
         dispatch({ type: event.shiftKey ? 'redo' : 'undo' })
+        return
+      }
+      const shortcut = event.metaKey || event.ctrlKey ? event.key.toLowerCase() : null
+      if (shortcut === 'v' && clipboard.current) {
+        event.preventDefault()
+        // 貼るたびに少しずらす。同じ場所に重なると、貼れたのか分からないため
+        clipboard.current = { ...clipboard.current, x: clipboard.current.x + PASTE_OFFSET, y: clipboard.current.y + PASTE_OFFSET }
+        paste(clipboard.current)
+        return
+      }
+      const selected = annotations.find((annotation) => annotation.id === selectedId)
+      if (selected && (shortcut === 'c' || shortcut === 'd')) {
+        event.preventDefault()
+        clipboard.current = selected
+        if (shortcut === 'd') {
+          clipboard.current = { ...selected, x: selected.x + PASTE_OFFSET, y: selected.y + PASTE_OFFSET }
+          paste(clipboard.current)
+        }
         return
       }
       if (!selectedId) return
