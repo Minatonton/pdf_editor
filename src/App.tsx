@@ -14,7 +14,8 @@ import { PagePanel } from './components/PagePanel'
 import { PageView } from './components/PageView'
 import { PageMarksDialog } from './components/PageMarksDialog'
 import { SignatureDialog, type SignatureKind } from './components/SignatureDialog'
-import { ToolBar } from './components/ToolBar'
+import { ToolsPanel } from './components/ToolsPanel'
+import { entryIdOf, type ToolEntry } from './editor/toolCatalog'
 import { MARK_COLORS, type Tool } from './editor/tools'
 import { clampZoom, fitWidthZoom, stepZoom, ZOOM_STEPS } from './editor/zoom'
 import type { Annotation } from './annotations/types'
@@ -60,6 +61,7 @@ export default function App() {
   const [busy, setBusy] = useState(false)
   const [signing, setSigning] = useState(false)
   const [editingMarks, setEditingMarks] = useState(false)
+  const [showPages, setShowPages] = useState(true)
   const [error, setError] = useState<string | null>(null)
   /** 写したもの。ブラウザのクリップボードには入れない（画像の中身や署名を外に出さないため） */
   const clipboard = useRef<Annotation | null>(null)
@@ -118,6 +120,28 @@ export default function App() {
       setSelectedId(null)
     }
     setEditingId(null)
+  }
+
+  /** 一覧の項目を選んだとき。選んでいる道具をもう一度選んだら、道具を置く（選択に戻る） */
+  const runEntry = (entry: ToolEntry) => {
+    if ('tool' in entry.run) {
+      setTool(entryIdOf(tool) === entry.id ? { kind: 'select' } : entry.run.tool)
+      return
+    }
+    switch (entry.run.command) {
+      case 'chooseImage':
+        imageInput.current?.click()
+        break
+      case 'sign':
+        setSigning(true)
+        break
+      case 'pageMarks':
+        setEditingMarks(true)
+        break
+      case 'organizePages':
+        setShowPages(true)
+        break
+    }
   }
 
   const paste = (source: Annotation) => {
@@ -533,16 +557,6 @@ export default function App() {
         />
       </header>
 
-      {pdf && (
-        <ToolBar
-          tool={tool}
-          onToolChange={setTool}
-          onChooseImage={() => imageInput.current?.click()}
-          onSign={() => setSigning(true)}
-          onEditPageMarks={() => setEditingMarks(true)}
-        />
-      )}
-
       {editingMarks && (
         <PageMarksDialog marks={history.present.pageMarks} dispatch={dispatch} onClose={() => setEditingMarks(false)} />
       )}
@@ -566,7 +580,8 @@ export default function App() {
       )}
 
       <div className="workspace">
-        {pdf && (
+        {pdf && <ToolsPanel tool={tool} onRun={runEntry} />}
+        {pdf && showPages && (
           <PagePanel
             pages={pages}
             proxyOf={proxyOf}

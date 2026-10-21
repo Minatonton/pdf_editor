@@ -595,9 +595,7 @@ button.danger {
 }
 
 .toolbar button,
-.toolbar select,
-.tool-bar button,
-.tool-bar select {
+.toolbar select {
   white-space: nowrap;
 }
 
@@ -605,44 +603,6 @@ button.danger {
   white-space: nowrap;
 }
 
-/* 道具は2段目にまとめ、狭い画面では折り返さず横に送る */
-.tool-bar {
-  display: flex;
-  gap: 20px;
-  overflow-x: auto;
-  padding: 6px 16px 8px;
-  border-bottom: 1px solid var(--line);
-  background: var(--surface);
-}
-
-.tool-group {
-  display: flex;
-  flex: none;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.tool-group-label {
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.tool-group-items {
-  display: flex;
-  gap: 4px;
-}
-
-.tool-bar button,
-.tool-bar select {
-  height: 30px;
-  font-size: 13px;
-}
-
-.tool-bar select[data-active='true'] {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent);
-}
 
 /* フォームの欄。紙の上の欄だと分かるよう、Acrobat と同じく薄い青で塗る */
 .form-field {
@@ -753,4 +713,126 @@ input.form-field[type='radio'] {
 .selection-toolbar .link-input[aria-invalid='true'] {
   border-color: var(--danger);
   color: var(--danger);
+}
+
+/* 左の「すべてのツール」 */
+.tools-panel {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: 232px;
+  overflow-y: auto;
+  border-right: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.tools-panel.collapsed {
+  align-items: center;
+  gap: 2px;
+  width: 48px;
+  padding: 8px 0;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 8px 8px 16px;
+}
+
+.panel-header h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.rail-button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--sub);
+}
+
+.rail-button:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.rail-button[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.tool-category {
+  padding: 0 8px 4px;
+}
+
+.tool-category + .tool-category {
+  border-top: 1px solid var(--line);
+  padding-top: 4px;
+}
+
+.category-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 36px;
+  padding: 0 8px;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  font-weight: 700;
+  text-align: left;
+}
+
+.category-header span {
+  flex: 1;
+}
+
+.category-header:hover {
+  background: var(--hover);
+}
+
+.tool-category ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tool-entry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 34px;
+  padding: 0 8px 0 16px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+}
+
+.tool-entry .icon-svg {
+  flex: none;
+  color: var(--sub);
+}
+
+.tool-entry:hover {
+  background: var(--hover);
+}
+
+.tool-entry[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.tool-entry[aria-pressed='true'] .icon-svg {
+  color: var(--accent);
 }
