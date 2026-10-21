@@ -113,9 +113,9 @@ function namesUsedIn(source: PDFDocument, streams: PDFObject[]): Set<string> | n
  * 描画命令が実際に名前で使っている資源だけを持つ、新しい資源の辞書を作る。
  * 資源の辞書はページの間や親のページの木で共有されることが多く、そのまま写すと、
  * 使わないページでしか描いていない画像なども一緒に写り、読み出せてしまうため。
- * 埋め込みの図形（Form XObject）も自分の資源を持つので、同じように絞り込む
+ * names が null（描画命令を読めなかった）ときは、何も残さない。分からないものは持ち込まない側に倒す
  */
-function pruneResources(source: PDFDocument, resources: PDFDict, names: Set<string>, forms: Set<string>): PDFDict {
+function pruneResources(source: PDFDocument, resources: PDFDict, names: Set<string> | null): PDFDict {
   const pruned = source.context.obj({})
   for (const [key, value] of resources.entries()) {
     const category = source.context.lookup(value)
@@ -125,36 +125,66 @@ function pruneResources(source: PDFDocument, resources: PDFDict, names: Set<stri
     }
     const kept = source.context.obj({})
     for (const [name, resource] of category.entries()) {
-      if (!names.has(name.decodeText())) continue
-      kept.set(name, resource)
-      if (key.decodeText() === 'XObject' && resource instanceof PDFRef) pruneForm(source, resource, forms)
+      if (names?.has(name.decodeText())) kept.set(name, resource)
     }
     pruned.set(key, kept)
   }
   return pruned
 }
 
-function pruneForm(source: PDFDocument, ref: PDFRef, forms: Set<string>) {
-  if (forms.has(ref.tag)) return
-  forms.add(ref.tag)
-  const form = source.context.lookup(ref)
-  if (!(form instanceof PDFStream)) return
-  const resources = form.dict.lookupMaybe(PDFName.of('Resources'), PDFDict)
-  const names = namesUsedIn(source, [form])
-  if (resources && names) form.dict.set(PDFName.of('Resources'), pruneResources(source, resources, names, forms))
+/**
+ * 自分の資源（/Resources）を持つものが、自分の描画で使う名前。
+ * 埋め込みの図形や模様はストリームの中身、Type3 フォントは各文字の描画命令（/CharProcs）を読む
+ */
+function namesOfResourceHolder(source: PDFDocument, holder: PDFDict | PDFStream): Set<string> | null {
+  if (holder instanceof PDFStream) return namesUsedIn(source, [holder])
+  const charProcs = holder.lookupMaybe(PDFName.of('CharProcs'), PDFDict)
+  if (charProcs) return namesUsedIn(source, charProcs.entries().map(([, value]) => value))
+  return new Set()
+}
+
+/**
+ * 残した資源からたどれるもののうち、自分の資源を持つもの（埋め込みの図形、模様、Type3 フォント、
+ * 透明マスクの図形など）の資源も、それぞれの描画で使う名前だけに絞り込む。
+ * 種類ごとに挙げると漏れが出るので、/Resources を持つものはすべて同じように扱う
+ */
+function pruneNestedResources(source: PDFDocument, start: PDFDict) {
+  const visited = new Set<string>()
+  const visit = (object: PDFObject | undefined) => {
+    if (object instanceof PDFRef) {
+      if (visited.has(object.tag)) return
+      visited.add(object.tag)
+      const target = source.context.lookup(object)
+      if (isPageTreeNode(target)) return
+      visit(target)
+      return
+    }
+    const dict = object instanceof PDFStream ? object.dict : object instanceof PDFDict ? object : undefined
+    if (dict) {
+      const resources = dict.lookupMaybe(PDFName.of('Resources'), PDFDict)
+      if (resources && object !== start) {
+        dict.set(PDFName.of('Resources'), pruneResources(source, resources, namesOfResourceHolder(source, object as PDFDict | PDFStream)))
+      }
+      for (const [, value] of dict.entries()) visit(value)
+    } else if (object instanceof PDFArray) {
+      for (const value of object.asArray()) visit(value)
+    }
+  }
+  visit(start)
 }
 
 function pruneUsedPageResources(source: PDFDocument, used: PDFPage[]) {
-  const forms = new Set<string>()
   for (const page of used) {
     const inherited = page.node.getInheritableAttribute(PDFName.of('Resources'))
     const resources = inherited && source.context.lookup(inherited)
+    if (!(resources instanceof PDFDict)) continue
     const contents = page.node.get(PDFName.of('Contents'))
     const resolved = contents instanceof PDFRef ? source.context.lookup(contents) : contents
     const names = namesUsedIn(source, resolved instanceof PDFArray ? resolved.asArray() : resolved ? [resolved] : [])
-    if (!(resources instanceof PDFDict) || !names) continue
     // ページ自身に持たせて、親から受け継ぐ（共有の）辞書を使わないようにする
-    page.node.set(PDFName.of('Resources'), pruneResources(source, resources, names, forms))
+    const pruned = pruneResources(source, resources, names)
+    page.node.set(PDFName.of('Resources'), pruned)
+    pruneNestedResources(source, pruned)
   }
 }
 

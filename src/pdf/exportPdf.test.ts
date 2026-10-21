@@ -224,6 +224,30 @@ describe('exportPdf', () => {
     expect(await objectsContaining(saved, 'USED-IMAGE-MARKER')).toBeGreaterThan(0)
   })
 
+  it('模様（Pattern）が持つ資源も、その模様で使わないものは持ち込まない', async () => {
+    const pdf = await pagesSharingResources('/P1 scn', (doc) => {
+      const secret = doc.context.register(doc.context.stream('DELETED-PAGE-MARKER image', { Type: 'XObject', Subtype: 'Image' }))
+      const pattern = doc.context.register(
+        doc.context.stream('0 0 1 1 re f', { PatternType: 1, Resources: { XObject: { Secret: secret } } }),
+      )
+      return doc.context.obj({ Pattern: { P1: pattern } })
+    })
+    const saved = await exportPdf([await pdf.save({ useObjectStreams: false })], { pages: [ref(0, 0)], annotations: [] })
+    expect(await containsMarker(saved)).toBe(false)
+  })
+
+  it('描画命令を読めない図形の資源は、中身が分からないので持ち込まない', async () => {
+    const pdf = await pagesSharingResources('/Fm1 Do', (doc) => {
+      const secret = doc.context.register(doc.context.stream('DELETED-PAGE-MARKER image', { Type: 'XObject', Subtype: 'Image' }))
+      const form = doc.context.register(
+        doc.context.stream('unreadable', { Subtype: 'Form', Filter: 'JBIG2Decode', Resources: { XObject: { Secret: secret } } }),
+      )
+      return doc.context.obj({ XObject: { Fm1: form } })
+    })
+    const saved = await exportPdf([await pdf.save({ useObjectStreams: false })], { pages: [ref(0, 0)], annotations: [] })
+    expect(await containsMarker(saved)).toBe(false)
+  })
+
   describe('墨消し', () => {
     // 1×1 の黒い PNG
     const BLACK_PIXEL = Uint8Array.from(
