@@ -1,6 +1,7 @@
 import { AnnotationMode, type PDFPageProxy } from 'pdfjs-dist'
 import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from 'react'
 import { viewSizeOf, type EditorAction, type FieldValue, type PageRef } from '../editor/document'
+import { expandMark, type PageMarks } from '../editor/pageMarks'
 import type { Annotation } from '../annotations/types'
 import { boundsOf, type Point } from '../pdf/geometry'
 import { textLinesOf } from '../pdf/pageText'
@@ -14,6 +15,8 @@ export function PageView({
   page,
   proxy,
   pageNumber,
+  pageCount,
+  pageMarks,
   scale,
   annotations,
   selectedId,
@@ -37,6 +40,8 @@ export function PageView({
   /** 白紙のページには元になる PDF のページがない */
   proxy: PDFPageProxy | undefined
   pageNumber: number
+  pageCount: number
+  pageMarks: PageMarks
   scale: number
   annotations: Annotation[]
   selectedId: string | null
@@ -171,6 +176,15 @@ export function PageView({
             }}
           />
         )}
+        <div className="page-marks" aria-hidden style={{ fontSize: 10 * scale }}>
+          {pageMarks.header && <div className="page-mark header">{expandMark(pageMarks.header, pageNumber, pageCount)}</div>}
+          {pageMarks.watermark && (
+            <div className="page-mark watermark" style={{ fontSize: (Math.min(size.width, size.height) / 8) * scale }}>
+              {expandMark(pageMarks.watermark, pageNumber, pageCount)}
+            </div>
+          )}
+          {pageMarks.footer && <div className="page-mark footer">{expandMark(pageMarks.footer, pageNumber, pageCount)}</div>}
+        </div>
         {proxy && (
           <FormLayer
             proxy={proxy}

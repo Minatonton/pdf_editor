@@ -20,11 +20,13 @@ export function ToolBar({
   onToolChange,
   onChooseImage,
   onSign,
+  onEditPageMarks,
 }: {
   tool: Tool
   onToolChange: (tool: Tool) => void
   onChooseImage: () => void
   onSign: () => void
+  onEditPageMarks: () => void
 }) {
   const toggle = (next: Tool) => onToolChange(tool.kind === next.kind ? { kind: 'select' } : next)
   const isShape = tool.kind === 'shape' && tool.variant !== 'ink'
@@ -110,6 +112,12 @@ export function ToolBar({
         </select>
         <button onClick={onSign} title="手書きの署名、名前の署名、印鑑を作って置く">
           署名・印鑑
+        </button>
+      </Group>
+
+      <Group label="全ページ">
+        <button onClick={onEditPageMarks} title="透かし、ヘッダー、フッター（ページ番号）を全ページに入れる">
+          透かし・ページ番号
         </button>
       </Group>
 

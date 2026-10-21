@@ -11,6 +11,7 @@ import {
 } from './annotations/types'
 import { PagePanel } from './components/PagePanel'
 import { PageView } from './components/PageView'
+import { PageMarksDialog } from './components/PageMarksDialog'
 import { SignatureDialog, type SignatureKind } from './components/SignatureDialog'
 import { ToolBar } from './components/ToolBar'
 import { MARK_COLORS, type Tool } from './editor/tools'
@@ -55,6 +56,7 @@ export default function App() {
   const [zoom, setZoom] = useState(1)
   const [busy, setBusy] = useState(false)
   const [signing, setSigning] = useState(false)
+  const [editingMarks, setEditingMarks] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const pdfInput = useRef<HTMLInputElement>(null)
   const imageInput = useRef<HTMLInputElement>(null)
@@ -443,7 +445,12 @@ export default function App() {
           onToolChange={setTool}
           onChooseImage={() => imageInput.current?.click()}
           onSign={() => setSigning(true)}
+          onEditPageMarks={() => setEditingMarks(true)}
         />
+      )}
+
+      {editingMarks && (
+        <PageMarksDialog marks={history.present.pageMarks} dispatch={dispatch} onClose={() => setEditingMarks(false)} />
       )}
 
       {signing && (
@@ -486,6 +493,8 @@ export default function App() {
                 page={ref}
                 proxy={proxyOf(ref)}
                 pageNumber={pageIndex + 1}
+                pageCount={pages.length}
+                pageMarks={history.present.pageMarks}
                 scale={zoom}
                 annotations={annotations.filter((annotation) => annotation.pageId === ref.id)}
                 selectedId={selectedId}

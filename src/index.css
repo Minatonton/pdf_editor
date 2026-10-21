@@ -643,3 +643,49 @@ input.form-field[type='radio'] {
   accent-color: var(--accent);
   cursor: pointer;
 }
+
+.page-marks {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  color: #333;
+  pointer-events: none;
+}
+
+.page-mark {
+  position: absolute;
+  left: 50%;
+  font-family: 'Noto Sans JP', sans-serif;
+  line-height: 1.4;
+  white-space: pre;
+  transform: translate(-50%, -50%);
+}
+
+/* 保存のときと同じく、余白の真ん中（上下 24pt）に中心を置く。位置は % ではなく em で、拡大率に合わせる */
+.page-mark.header {
+  top: 2.4em;
+}
+
+.page-mark.footer {
+  bottom: 2.4em;
+  transform: translate(-50%, 50%);
+}
+
+.page-mark.watermark {
+  top: 50%;
+  color: rgb(128 128 128 / 0.25);
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+.dialog h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.dialog .field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--sub);
+  font-size: 12px;
+}
