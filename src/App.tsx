@@ -646,6 +646,7 @@ export default function App() {
           <PagePanel
             pages={pages}
             proxyOf={proxyOf}
+            currentId={pages[Math.min(currentPage, pages.length - 1)]?.id}
             selectedIds={selectedPageIds}
             onSelect={setSelectedPageIds}
             onJump={jumpToPage}

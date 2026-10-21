@@ -56,6 +56,7 @@ function ActionButton({
 export function PagePanel({
   pages,
   proxyOf,
+  currentId,
   selectedIds,
   onSelect,
   onJump,
@@ -67,6 +68,8 @@ export function PagePanel({
 }: {
   pages: PageRef[]
   proxyOf: (page: PageRef) => PDFPageProxy | undefined
+  /** 書類で今見ているページ。一覧の中でも見失わないよう示し、見える位置まで送る */
+  currentId: string | undefined
   selectedIds: string[]
   onSelect: (ids: string[]) => void
   onJump: (id: string) => void
@@ -79,6 +82,11 @@ export function PagePanel({
   // 範囲選択の起点。Shift を押しながら選んだときに、ここから選んだページまでをまとめて選ぶ
   const [anchorId, setAnchorId] = useState<string | null>(null)
   const [dropIndex, setDropIndex] = useState<number | null>(null)
+  const currentItem = useRef<HTMLLIElement>(null)
+
+  useEffect(() => {
+    currentItem.current?.scrollIntoView({ block: 'nearest' })
+  }, [currentId])
   const selected = new Set(selectedIds)
   const targets = selectedIds.length > 0 ? selectedIds : []
   const insertIndex = selectedIds.length > 0 ? Math.max(...selectedIds.map((id) => pages.findIndex((p) => p.id === id))) + 1 : pages.length
@@ -152,6 +160,8 @@ export function PagePanel({
             key={page.id}
             draggable
             data-selected={selected.has(page.id)}
+            data-current={page.id === currentId}
+            ref={page.id === currentId ? currentItem : undefined}
             data-drop-before={dropIndex === i}
             data-drop-after={dropIndex === pages.length && i === pages.length - 1}
             onClick={(event) => handleClick(event, page)}

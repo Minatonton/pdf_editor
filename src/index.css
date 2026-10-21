@@ -972,3 +972,13 @@ input.form-field[type='radio'] {
 .pages {
   padding-bottom: 96px;
 }
+
+.thumbnails li[data-current='true'] > span {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.thumbnails li[data-current='true']:not([data-selected='true']) .thumbnail-clip,
+.thumbnails li[data-current='true']:not([data-selected='true']) .blank-thumbnail {
+  outline: 1px solid var(--accent);
+}
