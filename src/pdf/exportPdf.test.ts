@@ -262,6 +262,14 @@ describe('exportPdf', () => {
     expect(annotation.lookup(PDFName.of('Rect'), PDFArray).asArray().map((n) => n.toString())).toEqual(['10', '260', '30', '280'])
   })
 
+  it('トリミングした範囲を表示範囲にし、置いたものは切り取る前の位置のまま描く', async () => {
+    const file = await pdfWithPages([300, 400])
+    const page: PageRef = { ...ref(0, 0), width: 300, height: 400, crop: { left: 50, bottom: 100, right: 250, top: 350 } }
+    const saved = await exportPdf([file], { pages: [page], annotations: [], formValues: {}, pageMarks: NO_PAGE_MARKS })
+    const box = (await PDFDocument.load(saved)).getPage(0).getCropBox()
+    expect(box).toEqual({ x: 50, y: 100, width: 200, height: 250 })
+  })
+
   describe('リンク', () => {
     const pages = [{ ...ref(0, 0), width: 300, height: 300 }, { ...ref(0, 1), width: 300, height: 300 }]
     const link = (target: LinkAnnotation['target']): LinkAnnotation => ({ id: 'l', kind: 'link', pageId: '0-0', x: 10, y: 10, width: 50, height: 20, target })

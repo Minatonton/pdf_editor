@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { EMPTY_HISTORY, editorReducer, type EditorAction, type History, type PageRef } from './document'
+import { EMPTY_HISTORY, editorReducer, visibleRectOf, type EditorAction, type History, type PageRef } from './document'
 import type { ImageAnnotation, RectAnnotation, TextAnnotation } from '../annotations/types'
 
 const text: TextAnnotation = { id: 't', kind: 'text', pageId: 'p1', x: 10, y: 20, text: 'こんにちは', fontSize: 16, color: '#111111' }
@@ -162,5 +162,37 @@ describe('ページの整理', () => {
     ].reduce((h, a) => editorReducer(h, a as EditorAction), opened('a'))
     expect(history.present.pages[0].rotation).toBe(0)
     expect(history.present.annotations[0]).toMatchObject({ x: text.x, y: text.y })
+  })
+})
+
+describe('トリミング', () => {
+  const page: PageRef = { id: 'a', file: 0, index: 0, rotation: 0, width: 600, height: 800 }
+  const crop = (rotation: PageRef['rotation'], rect: { x: number; y: number; width: number; height: number } | null) =>
+    editorReducer(editorReducer(EMPTY_HISTORY, { type: 'open', pages: [{ ...page, rotation }] }), { type: 'cropPages', ids: ['a'], rect }).present.pages[0]
+
+  it('描いた範囲を、そのまま残す範囲にする', () => {
+    expect(visibleRectOf(crop(0, { x: 50, y: 100, width: 300, height: 200 }))).toEqual({ x: 50, y: 100, width: 300, height: 200 })
+  })
+
+  it('回したページでも、描いた範囲がそのまま残る範囲になる', () => {
+    expect(visibleRectOf(crop(90, { x: 50, y: 100, width: 300, height: 200 }))).toEqual({ x: 50, y: 100, width: 300, height: 200 })
+  })
+
+  it('トリミングしたあとにページを回しても、紙の同じ範囲を残す', () => {
+    const cropped = crop(0, { x: 0, y: 0, width: 300, height: 200 })
+    const rotated = editorReducer(
+      editorReducer(EMPTY_HISTORY, { type: 'open', pages: [cropped] }),
+      { type: 'rotatePages', ids: ['a'], degrees: 90 },
+    ).present.pages[0]
+    // 左上の角の範囲は、右に90度回すと右上の角に来る（回したあとの幅は 800）
+    expect(visibleRectOf(rotated)).toEqual({ x: 600, y: 0, width: 200, height: 300 })
+  })
+
+  it('ページの外まで描いた範囲は、ページの端で止める', () => {
+    expect(visibleRectOf(crop(0, { x: -20, y: 700, width: 100, height: 300 }))).toEqual({ x: 0, y: 700, width: 80, height: 100 })
+  })
+
+  it('トリミングを外すと、ページ全体に戻る', () => {
+    expect(visibleRectOf(crop(0, null))).toEqual({ x: 0, y: 0, width: 600, height: 800 })
   })
 })

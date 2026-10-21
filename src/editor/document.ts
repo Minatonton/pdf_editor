@@ -1,7 +1,7 @@
 import { resizeBox } from '../annotations/boxSize'
 import type { Annotation, LinkAnnotation, RectStyle, ShapeStyle, TextAnnotation } from '../annotations/types'
 import { NO_PAGE_MARKS, type PageMarks } from './pageMarks'
-import { normalizeRotation, pdfToViewPoint, viewToPdfPoint, type PageBox, type Rotation } from '../pdf/geometry'
+import { normalizeRotation, pdfToViewPoint, viewToPdfPoint, type PageBox, type Rotation, type ViewRect } from '../pdf/geometry'
 
 /** 保存する PDF の1ページ。どのファイルの何ページ目を、どの向きで使うか */
 export interface PageRef {
@@ -13,6 +13,11 @@ export interface PageRef {
   /** 回転させる前（/Rotate が 0 のとき）の幅と高さ */
   width: number
   height: number
+  /**
+   * トリミングして残す範囲。回転させる前のページの左下を原点とする座標で持ち、向きを変えても同じ範囲を指す。
+   * 置いたものの位置は切り取る前のページの座標のままにする。トリミングし直したときに、置いたものがずれないため
+   */
+  crop?: { left: number; bottom: number; right: number; top: number }
 }
 
 /** 白紙のページは元になるファイルを持たないので、ファイル番号の代わりにこれを入れる */
@@ -63,6 +68,8 @@ export type EditorAction =
   /** ids のページを、残りのページの並びで index の位置に移す（ids の順番は今の並び順を保つ） */
   | { type: 'movePages'; ids: string[]; index: number }
   | { type: 'insertPages'; pages: PageRef[]; index: number }
+  /** rect は切り取る前の画面の座標。null でトリミングを外す */
+  | { type: 'cropPages'; ids: string[]; rect: ViewRect | null }
   | { type: 'undo' }
   | { type: 'redo' }
 
@@ -71,6 +78,28 @@ export const EMPTY_HISTORY: History = { past: [], present: { pages: [], annotati
 export function viewSizeOf(page: PageRef): { width: number; height: number } {
   const turned = page.rotation === 90 || page.rotation === 270
   return turned ? { width: page.height, height: page.width } : { width: page.width, height: page.height }
+}
+
+const fullBox = (page: PageRef): PageBox => ({ left: 0, bottom: 0, right: page.width, top: page.height })
+
+/** トリミングして残す範囲を、切り取る前の画面の座標で表したもの。トリミングしていなければページ全体 */
+export function visibleRectOf(page: PageRef): ViewRect {
+  if (!page.crop) return { x: 0, y: 0, ...viewSizeOf(page) }
+  const a = pdfToViewPoint(page.crop.left, page.crop.bottom, fullBox(page), page.rotation)
+  const b = pdfToViewPoint(page.crop.right, page.crop.top, fullBox(page), page.rotation)
+  return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(b.x - a.x), height: Math.abs(b.y - a.y) }
+}
+
+function cropFromView(page: PageRef, rect: ViewRect): PageRef['crop'] {
+  const view = viewSizeOf(page)
+  // ページの外まで描いた範囲は、ページの端で止める
+  const x0 = Math.max(0, rect.x)
+  const y0 = Math.max(0, rect.y)
+  const x1 = Math.min(view.width, rect.x + rect.width)
+  const y1 = Math.min(view.height, rect.y + rect.height)
+  const a = viewToPdfPoint(x0, y0, fullBox(page), page.rotation)
+  const b = viewToPdfPoint(x1, y1, fullBox(page), page.rotation)
+  return { left: Math.min(a.x, b.x), bottom: Math.min(a.y, b.y), right: Math.max(a.x, b.x), top: Math.max(a.y, b.y) }
 }
 
 export function rotateBy(rotation: Rotation, degrees: number): Rotation {
@@ -196,6 +225,15 @@ export function editorReducer(history: History, action: EditorAction): History {
         ...present,
         pages: [...present.pages.slice(0, action.index), ...action.pages, ...present.pages.slice(action.index)],
       })
+    case 'cropPages': {
+      const ids = new Set(action.ids)
+      return commit(history, {
+        ...present,
+        pages: present.pages.map((page) =>
+          ids.has(page.id) ? { ...page, crop: action.rect ? cropFromView(page, action.rect) : undefined } : page,
+        ),
+      })
+    }
     case 'undo': {
       const previous = history.past.at(-1)
       if (!previous) return history
