@@ -652,6 +652,7 @@ export default function App() {
                 fieldValueOf={(name) => history.present.formValues[fieldKey(ref.file, name)]}
                 onFieldChange={(name, value) => dispatch({ type: 'setField', key: fieldKey(ref.file, name), value })}
                 onSelect={selectAnnotation}
+                onSelectMany={(ids, additive) => setSelectedIds(additive ? [...new Set([...selectedIds, ...ids])] : ids)}
                 onEdit={setEditingId}
                 onEditEnd={endEditing}
                 onRemove={(id) => removeAnnotations([id])}

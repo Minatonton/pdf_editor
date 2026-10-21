@@ -1123,3 +1123,10 @@ input.form-field[type='radio'] {
   left: 0;
   height: 1px;
 }
+
+.marquee-rect {
+  position: absolute;
+  border: 1px solid var(--accent);
+  background: rgb(20 115 230 / 0.08);
+  pointer-events: none;
+}

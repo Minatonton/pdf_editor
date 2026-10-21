@@ -38,6 +38,7 @@ export function PageView({
   fieldValueOf,
   onFieldChange,
   onSelect,
+  onSelectMany,
   onEdit,
   onEditEnd,
   onRemove,
@@ -72,6 +73,7 @@ export function PageView({
   fieldValueOf: (name: string) => FieldValue | undefined
   onFieldChange: (name: string, value: FieldValue) => void
   onSelect: (id: string | null, additive?: boolean) => void
+  onSelectMany: (ids: string[], additive: boolean) => void
   onEdit: (id: string) => void
   onEditEnd: () => void
   onRemove: (id: string) => void
@@ -175,26 +177,52 @@ export function PageView({
 
   const drawnRect = drawing && boundsOf(drawing)
 
-  const drawHandlers = drawMode
+  // 道具を持っていないときに何もない所からドラッグすると、囲んだものをまとめて選ぶ
+  const mode = drawMode ?? (placing ? null : 'marquee')
+
+  /** 範囲にかかっている置いたもの。大きさは見た目から測る（文字は大きさを持っていないため） */
+  const annotationsIn = (rect: ViewRect) => {
+    const overlay = overlayRef.current!
+    const origin = overlay.getBoundingClientRect()
+    return [...overlay.querySelectorAll<HTMLElement>('.annotation[data-id]')]
+      .filter((element) => {
+        const r = element.getBoundingClientRect()
+        const left = (r.left - origin.left) / scale
+        const top = (r.top - origin.top) / scale
+        return left < rect.x + rect.width && left + r.width / scale > rect.x && top < rect.y + rect.height && top + r.height / scale > rect.y
+      })
+      .map((element) => element.dataset.id!)
+  }
+
+  const drawHandlers = mode
     ? {
         onPointerDown: (event: PointerEvent<HTMLDivElement>) => {
           if (event.button !== 0) return
+          if (mode === 'marquee' && event.target !== event.currentTarget) return
           event.currentTarget.setPointerCapture(event.pointerId)
           setDrawing([pointInPage(event)])
         },
         onPointerMove: (event: PointerEvent<HTMLDivElement>) => {
           const point = pointInPage(event)
-          setDrawing((current) => current && (drawMode === 'ink' ? [...current, point] : [current[0], point]))
+          setDrawing((current) => current && (mode === 'ink' ? [...current, point] : [current[0], point]))
         },
         // 指を離した位置は、最後の描画を待たずにこのイベントから取る。素早く引くと描画が追いつかないため
         onPointerUp: (event: PointerEvent<HTMLDivElement>) => {
           if (!drawing) return
           const last = pointInPage(event)
-          const points = drawMode === 'ink' ? [...drawing, last] : [drawing[0], last]
-          if (textMode === 'mark') onMarkText(page.id, linesInRect(textLines ?? [], boundsOf(points)))
-          else onDraw(page.id, points)
-          justDrew.current = true
+          const points = mode === 'ink' ? [...drawing, last] : [drawing[0], last]
           setDrawing(null)
+          if (mode === 'marquee') {
+            const rect = boundsOf(points)
+            // ほとんど動かしていなければクリックとみなし、続く click で選択を外す
+            if (rect.width < 3 && rect.height < 3) return
+            onSelectMany(annotationsIn(rect), event.shiftKey)
+          } else if (textMode === 'mark') {
+            onMarkText(page.id, linesInRect(textLines ?? [], boundsOf(points)))
+          } else {
+            onDraw(page.id, points)
+          }
+          justDrew.current = true
         },
       }
     : {}
@@ -230,9 +258,9 @@ export function PageView({
             />
           </svg>
         )}
-        {drawnRect && drawMode === 'box' && (
+        {drawnRect && (mode === 'box' || mode === 'marquee') && (
           <div
-            className="drawing-rect"
+            className={mode === 'marquee' ? 'marquee-rect' : 'drawing-rect'}
             style={{
               left: drawnRect.x * scale,
               top: drawnRect.y * scale,
