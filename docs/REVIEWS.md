@@ -16,9 +16,18 @@ PDF 編集アプリのレビューや掲示板を読み、このアプリの改�
 | 無料だと思ったら保存に課金が必要で中途半端 | 同上 | 保存に制限を設けない（もともと無料・ローカル） |
 | 機密の書類をクラウドに上げたくない | 記入ツールのまとめ（[Wild & Free Tools](https://wildandfreetools.com/blog/fill-pdf-reddit-best-free-2026/)） | 送信しないことを画面に明示し続ける |
 
+## 方針を変えたこと
+
+最初は「元の PDF の文字を直接書き換えたい」という要望を取り入れないことにしていた。
+埋め込みフォントの一部しか入っていない PDF では、商用ソフトでも文字化けやフォントの置き換えが起きているため
+（[Adobe Community](https://community.adobe.com/t5/type-typography-discussions/editing-text-in-a-pdf-and-all-of-a-sudden-the-font-changes/td-p/10332042)、[PDF Studio](https://kbpdfstudio.qoppa.com/warning-message-when-editing-text-content/)）。
+
+Acrobat と同じ編集ができることを目標にしたので、元の文字を書き換える代わりに
+「その行を白塗りで隠し、同じ位置・大きさで打ち直す」形で取り入れる。フォントは元と同じにはならない。
+Acrobat の機能との対応は [ACROBAT_PARITY.md](ACROBAT_PARITY.md) にまとめている。
+
 ## 取り入れなかったこと
 
 | 要望 | 出どころ | 取り入れない理由 |
 |---|---|---|
-| 元の PDF の文字を直接書き換えたい。書き換えるとフォントが勝手に変わる | Adobe・PDF-XChange のフォーラム（[Adobe Community](https://community.adobe.com/t5/type-typography-discussions/editing-text-in-a-pdf-and-all-of-a-sudden-the-font-changes/td-p/10332042)、[PDF Studio](https://kbpdfstudio.qoppa.com/warning-message-when-editing-text-content/)） | 埋め込みフォントの一部しか入っていない PDF では、商用ソフトでも文字化けやフォントの置き換えが起きている。このアプリは「上に重ねる」ことに絞り、元の文字は白塗りで隠してから書き直す形で代える |
 | Office 形式への変換、OCR、パスワード保護 | Foxit のレビュー | 「上に置いて保存する」という目的から外れ、画面が複雑になる |
