@@ -283,7 +283,7 @@ describe('exportPdf', () => {
       const file = await pdfWithPages([300, 300], [300, 300])
       const saved = await exportPdf([file], { pages, annotations: [link({ url: 'https://example.com/' })], formValues: {}, pageMarks: NO_PAGE_MARKS })
       const [action] = await actionOf(saved)
-      expect(action.get(PDFName.of('URI'))?.toString()).toBe('(https://example.com/)')
+      expect((action.lookup(PDFName.of('URI')) as PDFHexString).decodeText()).toBe('https://example.com/')
     })
 
     it('ページへのリンクは、保存した文書の中のそのページへ移る', async () => {
@@ -292,6 +292,17 @@ describe('exportPdf', () => {
       const loaded = await PDFDocument.load(saved)
       const [action] = await actionOf(saved)
       expect(action.lookup(PDFName.of('D'), PDFArray).get(0)).toBe(loaded.getPage(1).ref)
+    })
+
+    it('URL に PDF の区切り文字を混ぜても、リンクの注釈の外に何も差し込めない', async () => {
+      const file = await pdfWithPages([300, 300], [300, 300])
+      // URL の正規化で % に書き換わらない文字だけで、文字列を閉じて /Injected (1) という項目を作ろうとする
+      const injected = 'https://example.com/a)/Injected(1'
+      const saved = await exportPdf([file], { pages, annotations: [link({ url: injected })], formValues: {}, pageMarks: NO_PAGE_MARKS })
+      const page = (await PDFDocument.load(saved)).getPage(0)
+      const annotation = page.doc.context.lookup(page.node.Annots()!.get(0)) as PDFDict
+      expect(annotation.has(PDFName.of('Injected'))).toBe(false)
+      expect(annotation.lookup(PDFName.of('A'), PDFDict).has(PDFName.of('Injected'))).toBe(false)
     })
 
     it('開いた人の環境で何かを実行させうる URL は、保存の直前にも弾く', async () => {

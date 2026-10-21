@@ -19,6 +19,10 @@ describe('safeLinkUrl', () => {
     },
   )
 
+  it('PDF の文字列の区切りになる丸括弧と逆スラッシュは、% で書き換える', () => {
+    expect(safeLinkUrl('https://example.com/a(b)\\c')).toBe('https://example.com/a%28b%29/c')
+  })
+
   it('空やドメインになっていないものは受け付けない', () => {
     expect(safeLinkUrl('  ')).toBeNull()
     expect(safeLinkUrl('hello')).toBeNull()

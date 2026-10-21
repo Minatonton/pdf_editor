@@ -217,7 +217,8 @@ function addLink(pdf: PDFDocument, page: PDFPage, link: LinkAnnotation, box: Pag
   const a = viewToPdfPoint(link.x, link.y, box, rotation)
   const b = viewToPdfPoint(link.x + link.width, link.y + link.height, box, rotation)
   const action = url
-    ? { S: 'URI', URI: PDFString.of(url) }
+    ? // 文字列は 16 進で書く。URL の中身が PDF の文字列の区切りとして読まれ、別のオブジェクトを差し込まれないように
+      { S: 'URI', URI: PDFHexString.of([...url].map((char) => char.charCodeAt(0).toString(16).padStart(2, '0')).join('')) }
     : { S: 'GoTo', D: [destination!.ref, PDFName.of('Fit')] }
   const annotation = pdf.context.obj({
     Type: 'Annot',

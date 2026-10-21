@@ -15,5 +15,6 @@ export function safeLinkUrl(input: string): string | null {
   }
   if (!['http:', 'https:', 'mailto:', 'tel:'].includes(url.protocol)) return null
   if ((url.protocol === 'http:' || url.protocol === 'https:') && !url.hostname.includes('.')) return null
-  return url.href
+  // 丸括弧と逆スラッシュは PDF の文字列の区切りと逃がし文字なので、URL の書き方のまま残さず % で書き換える
+  return url.href.replace(/[()\\]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`)
 }
