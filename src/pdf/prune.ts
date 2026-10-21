@@ -1,4 +1,17 @@
-import { PDFArray, PDFDict, PDFName, PDFNull, PDFRef, PDFStream, type PDFDocument, type PDFObject, type PDFPage } from 'pdf-lib'
+import {
+  decodePDFRawStream,
+  PDFArray,
+  PDFContentStream,
+  PDFDict,
+  PDFName,
+  PDFNull,
+  PDFRawStream,
+  PDFRef,
+  PDFStream,
+  type PDFDocument,
+  type PDFObject,
+  type PDFPage,
+} from 'pdf-lib'
 
 const PARENT = PDFName.of('Parent')
 /** 親のページの木から受け継ぐ属性。ページそのものに書かれていなくても、そのページの表示に使われる */
@@ -64,6 +77,87 @@ function ownEntries(page: PDFPage, keys?: PDFName[]): PDFObject[] {
     .map(([, value]) => value)
 }
 
+/** 名前で引かれる資源の種類。ProcSet など名前で引かないものはそのまま残す */
+const NAMED_RESOURCES = ['Font', 'XObject', 'ExtGState', 'ColorSpace', 'Pattern', 'Shading', 'Properties']
+
+/**
+ * 描画命令の中に出てくる名前（/F1 など）をすべて集める。どの命令の引数かは見分けず、多めに拾う。
+ * 拾いすぎても資源が余分に残るだけだが、拾い漏らすとページが正しく表示されなくなるため。
+ * 読めない圧縮形式のときは null を返す
+ */
+function namesUsedIn(source: PDFDocument, streams: PDFObject[]): Set<string> | null {
+  const names = new Set<string>()
+  for (const item of streams) {
+    const stream = item instanceof PDFRef ? source.context.lookup(item) : item
+    if (!(stream instanceof PDFStream)) continue
+    let bytes: Uint8Array
+    try {
+      bytes =
+        stream instanceof PDFRawStream
+          ? decodePDFRawStream(stream).decode()
+          : stream instanceof PDFContentStream
+            ? stream.getUnencodedContents()
+            : stream.getContents()
+    } catch {
+      return null
+    }
+    const text = new TextDecoder('latin1').decode(bytes)
+    for (const match of text.matchAll(/\/([^\s/[\]()<>{}%]+)/g)) {
+      names.add(match[1].replace(/#([0-9a-fA-F]{2})/g, (_, hex: string) => String.fromCharCode(Number.parseInt(hex, 16))))
+    }
+  }
+  return names
+}
+
+/**
+ * 描画命令が実際に名前で使っている資源だけを持つ、新しい資源の辞書を作る。
+ * 資源の辞書はページの間や親のページの木で共有されることが多く、そのまま写すと、
+ * 使わないページでしか描いていない画像なども一緒に写り、読み出せてしまうため。
+ * 埋め込みの図形（Form XObject）も自分の資源を持つので、同じように絞り込む
+ */
+function pruneResources(source: PDFDocument, resources: PDFDict, names: Set<string>, forms: Set<string>): PDFDict {
+  const pruned = source.context.obj({})
+  for (const [key, value] of resources.entries()) {
+    const category = source.context.lookup(value)
+    if (!NAMED_RESOURCES.includes(key.decodeText()) || !(category instanceof PDFDict)) {
+      pruned.set(key, value)
+      continue
+    }
+    const kept = source.context.obj({})
+    for (const [name, resource] of category.entries()) {
+      if (!names.has(name.decodeText())) continue
+      kept.set(name, resource)
+      if (key.decodeText() === 'XObject' && resource instanceof PDFRef) pruneForm(source, resource, forms)
+    }
+    pruned.set(key, kept)
+  }
+  return pruned
+}
+
+function pruneForm(source: PDFDocument, ref: PDFRef, forms: Set<string>) {
+  if (forms.has(ref.tag)) return
+  forms.add(ref.tag)
+  const form = source.context.lookup(ref)
+  if (!(form instanceof PDFStream)) return
+  const resources = form.dict.lookupMaybe(PDFName.of('Resources'), PDFDict)
+  const names = namesUsedIn(source, [form])
+  if (resources && names) form.dict.set(PDFName.of('Resources'), pruneResources(source, resources, names, forms))
+}
+
+function pruneUsedPageResources(source: PDFDocument, used: PDFPage[]) {
+  const forms = new Set<string>()
+  for (const page of used) {
+    const inherited = page.node.getInheritableAttribute(PDFName.of('Resources'))
+    const resources = inherited && source.context.lookup(inherited)
+    const contents = page.node.get(PDFName.of('Contents'))
+    const resolved = contents instanceof PDFRef ? source.context.lookup(contents) : contents
+    const names = namesUsedIn(source, resolved instanceof PDFArray ? resolved.asArray() : resolved ? [resolved] : [])
+    if (!(resources instanceof PDFDict) || !names) continue
+    // ページ自身に持たせて、親から受け継ぐ（共有の）辞書を使わないようにする
+    page.node.set(PDFName.of('Resources'), pruneResources(source, resources, names, forms))
+  }
+}
+
 /**
  * 使うページの注釈から、ほかの注釈とのつながりを外し、ほかのページに属する注釈は取り除く。
  * 返信元（/IRT）、ほかのページのポップアップ（/Popup）、置かれたページ（/P）、
@@ -105,9 +199,10 @@ export function severDroppedPages(source: PDFDocument, usedIndices: Set<number>)
   const dropped = pages.filter((_, i) => !usedIndices.has(i))
   if (dropped.length === 0) return
 
+  pruneUsedPageResources(source, used)
   const neededForUsed = reachableFrom(
     source,
-    used.flatMap((page) => [...ownEntries(page, RENDERING), ...inheritedValues(page)]),
+    used.flatMap((page) => ownEntries(page, RENDERING)),
   )
   const owned = reachableFrom(
     source,

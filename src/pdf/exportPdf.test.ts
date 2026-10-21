@@ -175,14 +175,52 @@ describe('exportPdf', () => {
     expect(await containsMarker(saved)).toBe(false)
   })
 
-  it('残したページと削除したページが共有するフォントなどの資源は、残したページの表示のために残す', async () => {
+  /** 資源の辞書を共有する2ページの PDF。1ページ目の本文は content で描く */
+  async function pagesSharingResources(content: string, resources: (pdf: PDFDocument) => PDFDict) {
     const pdf = await PDFDocument.create()
-    const shared = pdf.context.register(pdf.context.obj({ Type: 'Font', Subtype: 'Type1', BaseFont: 'SHARED-FONT-MARKER' }))
-    for (const page of [pdf.addPage([100, 100]), pdf.addPage([100, 100])]) {
-      page.node.set(PDFName.of('Resources'), pdf.context.obj({ Font: { F1: shared } }))
-    }
-    const saved = await exportPdf([await pdf.save({ useObjectStreams: false })], { pages: [ref(0, 0)], annotations: [] })
+    const shared = pdf.context.register(resources(pdf))
+    const kept = pdf.addPage([100, 100])
+    const dropped = pdf.addPage([100, 100])
+    kept.node.set(PDFName.of('Contents'), pdf.context.register(pdf.context.stream(content)))
+    for (const page of [kept, dropped]) page.node.set(PDFName.of('Resources'), shared)
+    return pdf
+  }
+
+  async function objectsContaining(saved: Uint8Array, text: string) {
     const objects = (await PDFDocument.load(saved)).context.enumerateIndirectObjects()
-    expect(objects.some(([, object]) => object.toString().includes('SHARED-FONT-MARKER'))).toBe(true)
+    return objects.filter(([, object]) => object.toString().includes(text)).length
+  }
+
+  it('残したページの本文が使う資源は、削除したページと共有していても残す', async () => {
+    const pdf = await pagesSharingResources('BT /F1 12 Tf ET', (doc) =>
+      doc.context.obj({ Font: { F1: doc.context.register(doc.context.obj({ Type: 'Font', BaseFont: 'SHARED-FONT-MARKER' })) } }),
+    )
+    const saved = await exportPdf([await pdf.save({ useObjectStreams: false })], { pages: [ref(0, 0)], annotations: [] })
+    expect(await objectsContaining(saved, 'SHARED-FONT-MARKER')).toBeGreaterThan(0)
+  })
+
+  it('共有の資源の辞書にあっても、削除したページでしか使わない画像は残らない', async () => {
+    const pdf = await pagesSharingResources('BT /F1 12 Tf ET', (doc) =>
+      doc.context.obj({
+        Font: { F1: doc.context.register(doc.context.obj({ Type: 'Font', BaseFont: 'Helvetica' })) },
+        XObject: { Secret: doc.context.register(doc.context.stream('DELETED-PAGE-MARKER image', { Type: 'XObject', Subtype: 'Image' })) },
+      }),
+    )
+    const saved = await exportPdf([await pdf.save({ useObjectStreams: false })], { pages: [ref(0, 0)], annotations: [] })
+    expect(await containsMarker(saved)).toBe(false)
+  })
+
+  it('本文が使う埋め込みの図形も、その中で使わない資源は持ち込まない', async () => {
+    const pdf = await pagesSharingResources('/Fm1 Do', (doc) => {
+      const used = doc.context.register(doc.context.stream('USED-IMAGE-MARKER', { Type: 'XObject', Subtype: 'Image' }))
+      const secret = doc.context.register(doc.context.stream('DELETED-PAGE-MARKER image', { Type: 'XObject', Subtype: 'Image' }))
+      const form = doc.context.register(
+        doc.context.stream('/Im1 Do', { Type: 'XObject', Subtype: 'Form', Resources: { XObject: { Im1: used, Secret: secret } } }),
+      )
+      return doc.context.obj({ XObject: { Fm1: form } })
+    })
+    const saved = await exportPdf([await pdf.save({ useObjectStreams: false })], { pages: [ref(0, 0)], annotations: [] })
+    expect(await containsMarker(saved)).toBe(false)
+    expect(await objectsContaining(saved, 'USED-IMAGE-MARKER')).toBeGreaterThan(0)
   })
 })
