@@ -42,6 +42,9 @@ export function AnnotationBox({
   onSelect,
   onEdit,
   onEditEnd,
+  groupOffset,
+  onGroupDrag,
+  onMoved,
   onSnap,
   onSnapEnd,
   dispatch,
@@ -51,9 +54,14 @@ export function AnnotationBox({
   selected: boolean
   editing: boolean
   interactive: boolean
-  onSelect: (id: string) => void
+  onSelect: (id: string, additive?: boolean) => void
   onEdit: (id: string) => void
   onEditEnd: () => void
+  /** ほかの選んだものがつかまれて動いている途中のずれ（画面の画素）。自分がつかまれているときは使わない */
+  groupOffset: { dx: number; dy: number } | null
+  /** 複数選んでいるとき、動かしている途中のずれをほかの選んだものに伝える */
+  onGroupDrag?: (offset: { dx: number; dy: number } | null) => void
+  onMoved: (id: string, dx: number, dy: number) => void
   /** 動かした先の箱（と文字の基準線）を渡すと、吸い寄せるためにずらす量を返す。free のときは吸い寄せない */
   onSnap: (id: string, box: ViewRect, baseline: number | undefined, free: boolean) => { dx: number; dy: number }
   onSnapEnd: () => void
@@ -69,6 +77,11 @@ export function AnnotationBox({
     if (!interactive || (editing && !whileEditing) || event.button !== 0) return
     event.stopPropagation()
     event.preventDefault()
+    if (event.shiftKey && mode === 'move') {
+      // Shift を押しながら押したときは、選ぶものを足し引きするだけで動かさない
+      onSelect(annotation.id, true)
+      return
+    }
     onSelect(annotation.id)
     event.currentTarget.setPointerCapture(event.pointerId)
     const { offsetWidth: startWidth, offsetHeight: startHeight } = box.current!
@@ -96,7 +109,9 @@ export function AnnotationBox({
 
   const handleMove = (event: PointerEvent<HTMLElement>) => {
     if (!drag) return
-    setDrag({ ...drag, ...deltaOf(drag, event) })
+    const delta = deltaOf(drag, event)
+    if (drag.mode === 'move') onGroupDrag?.(delta)
+    setDrag({ ...drag, ...delta })
   }
 
   // 離した位置は、最後の描画を待たずにこのイベントから取る。素早く動かすと描画が追いつかず、ずれて置かれるため
@@ -106,7 +121,10 @@ export function AnnotationBox({
     onSnapEnd()
     const dx = final.dx / scale
     const dy = final.dy / scale
-    if (drag.mode === 'move' && (dx !== 0 || dy !== 0)) dispatch({ type: 'move', id: annotation.id, dx, dy })
+    if (drag.mode === 'move') {
+      if (dx !== 0 || dy !== 0) onMoved(annotation.id, dx, dy)
+      else onGroupDrag?.(null)
+    }
     if (drag.mode === 'resize' && annotation.kind !== 'text' && annotation.kind !== 'note' && (dx !== 0 || dy !== 0)) {
       dispatch({ type: 'resize', id: annotation.id, ...resizedBox(annotation, dx, dy) })
     }
@@ -116,8 +134,9 @@ export function AnnotationBox({
     setDrag(null)
   }
 
-  const moveX = drag?.mode === 'move' ? drag.dx / scale : 0
-  const moveY = drag?.mode === 'move' ? drag.dy / scale : 0
+  const offset = drag?.mode === 'move' ? drag : drag ? null : groupOffset
+  const moveX = offset ? offset.dx / scale : 0
+  const moveY = offset ? offset.dy / scale : 0
   const style: React.CSSProperties = {
     left: (annotation.x + moveX) * scale,
     top: (annotation.y + moveY) * scale,

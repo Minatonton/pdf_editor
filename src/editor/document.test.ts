@@ -41,6 +41,20 @@ describe('配置した要素の編集', () => {
     expect(present.annotations[0]).toMatchObject({ width: 120, height: 8 })
   })
 
+  it('選んだものをまとめて動かすと、1回で元に戻る', () => {
+    const history = run(
+      { type: 'addMany', annotations: [text, image] },
+      { type: 'moveEach', moves: [{ id: 't', dx: 5, dy: 0 }, { id: 'i', dx: 0, dy: 7 }] },
+    )
+    expect(history.present.annotations.map((a) => [a.x, a.y])).toEqual([[15, 20], [0, 7]])
+    expect(editorReducer(history, { type: 'undo' }).present.annotations.map((a) => [a.x, a.y])).toEqual([[10, 20], [0, 0]])
+  })
+
+  it('選んだものをまとめて消せる', () => {
+    const { present } = run({ type: 'addMany', annotations: [text, image] }, { type: 'removeMany', ids: ['t', 'i'] })
+    expect(present.annotations).toEqual([])
+  })
+
   it('削除すると、その要素だけがなくなる', () => {
     const { present: { annotations: present } } = run({ type: 'add', annotation: text }, { type: 'add', annotation: image }, { type: 'remove', id: 't' })
     expect(present.map((a) => a.id)).toEqual(['i'])

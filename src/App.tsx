@@ -53,7 +53,12 @@ export default function App() {
   /** 開いた PDF。保存する文書は2つ目以降のファイルのページも含められるので、ファイル番号で引く */
   const [files, setFiles] = useState<OpenedPdf[]>([])
   const [history, dispatchHistory] = useReducer(editorReducer, EMPTY_HISTORY)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  /** 選んでいるもの。Shift を押しながら選ぶと複数になり、まとめて動かす・消す・写す・揃える */
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
+  const setSelectedId = (id: string | null) => setSelectedIds(id ? [id] : [])
+  /** まとめて動かしている途中の、つかんでいないものの見た目のずれ（画面の画素） */
+  const [groupOffset, setGroupOffset] = useState<{ dx: number; dy: number } | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [selectedPageIds, setSelectedPageIds] = useState<string[]>([])
   /** PDF を選ぶ欄を、新しく開くために使うか、今の文書に差し込むために使うか */
@@ -69,7 +74,7 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState(0)
   const [error, setError] = useState<string | null>(null)
   /** 写したもの。ブラウザのクリップボードには入れない（画像の中身や署名を外に出さないため） */
-  const clipboard = useRef<Annotation | null>(null)
+  const clipboard = useRef<Annotation[]>([])
   const pagesArea = useRef<HTMLElement>(null)
   const pdfInput = useRef<HTMLInputElement>(null)
   const imageInput = useRef<HTMLInputElement>(null)
@@ -149,18 +154,42 @@ export default function App() {
     }
   }
 
-  const paste = (source: Annotation) => {
+  const paste = (sources: Annotation[]) => {
     // 写したページが削除されていたら、置き場所がないので貼らない
-    if (!pages.some((page) => page.id === source.pageId)) return
-    const id = crypto.randomUUID()
-    dispatch({ type: 'add', annotation: { ...source, id } })
-    setSelectedId(id)
+    const placed = sources
+      .filter((source) => pages.some((page) => page.id === source.pageId))
+      .map((source) => ({ ...source, id: crypto.randomUUID() }))
+    if (placed.length === 0) return
+    dispatch({ type: 'addMany', annotations: placed })
+    setSelectedIds(placed.map((annotation) => annotation.id))
   }
 
-  const removeAnnotation = (id: string) => {
-    dispatch({ type: 'remove', id })
-    setSelectedId(null)
+  const removeAnnotations = (ids: string[]) => {
+    dispatch({ type: 'removeMany', ids })
+    setSelectedIds([])
     setEditingId(null)
+  }
+
+  /** 選んだものをつかんで動かしたとき。複数選んでいれば、つかんでいないものも同じだけ動かす */
+  const moveSelection = (id: string, dx: number, dy: number) => {
+    setGroupOffset(null)
+    const ids = selectedIds.includes(id) ? selectedIds : [id]
+    dispatch({ type: 'moveEach', moves: ids.map((target) => ({ id: target, dx, dy })) })
+  }
+
+  /** Shift を押しながら選ぶと、選んでいるものに足したり外したりする */
+  const selectAnnotation = (id: string | null, additive = false) => {
+    if (id !== editingId) setEditingId(null)
+    if (!id) {
+      setSelectedIds([])
+      return
+    }
+    if (additive) {
+      setSelectedIds(selectedIds.includes(id) ? selectedIds.filter((selected) => selected !== id) : [...selectedIds, id])
+      return
+    }
+    // 複数選んでいるうちの1つをつかんだときは、まとめて動かせるよう選んだままにする
+    if (!selectedIds.includes(id)) setSelectedIds([id])
   }
 
   useEffect(() => {
@@ -171,7 +200,7 @@ export default function App() {
           return
         }
         setTool({ kind: 'select' })
-        setSelectedId(null)
+        setSelectedIds([])
         return
       }
       if (isEditingField(event.target)) return
@@ -186,30 +215,37 @@ export default function App() {
         setZoom(shortcut === '0' ? 1 : stepZoom(zoom, shortcut === '-' ? -1 : 1))
         return
       }
-      if (shortcut === 'v' && clipboard.current) {
+      // 貼るたびに少しずらす。同じ場所に重なると、貼れたのか分からないため
+      const shifted = (items: Annotation[]) => items.map((item) => ({ ...item, x: item.x + PASTE_OFFSET, y: item.y + PASTE_OFFSET }))
+      if (shortcut === 'v' && clipboard.current.length > 0) {
         event.preventDefault()
-        // 貼るたびに少しずらす。同じ場所に重なると、貼れたのか分からないため
-        clipboard.current = { ...clipboard.current, x: clipboard.current.x + PASTE_OFFSET, y: clipboard.current.y + PASTE_OFFSET }
+        clipboard.current = shifted(clipboard.current)
         paste(clipboard.current)
         return
       }
-      const selected = annotations.find((annotation) => annotation.id === selectedId)
-      if (selected && (shortcut === 'c' || shortcut === 'd')) {
+      const selected = annotations.filter((annotation) => selectedIds.includes(annotation.id))
+      if (selected.length > 0 && (shortcut === 'c' || shortcut === 'd')) {
         event.preventDefault()
         clipboard.current = selected
         if (shortcut === 'd') {
-          clipboard.current = { ...selected, x: selected.x + PASTE_OFFSET, y: selected.y + PASTE_OFFSET }
+          clipboard.current = shifted(selected)
           paste(clipboard.current)
         }
         return
       }
-      if (!selectedId) return
-      if (event.key === 'Delete' || event.key === 'Backspace') {
+      if (shortcut === 'a' && pdf) {
+        // 書類の中のものをすべて選ぶ。入力欄の中では文字の全選択のままにする（isEditingField で先に抜けている）
         event.preventDefault()
-        removeAnnotation(selectedId)
+        setSelectedIds(annotations.map((annotation) => annotation.id))
         return
       }
-      if (event.key === 'Enter' && annotations.find((annotation) => annotation.id === selectedId)?.kind === 'text') {
+      if (selected.length === 0) return
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        event.preventDefault()
+        removeAnnotations(selectedIds)
+        return
+      }
+      if (event.key === 'Enter' && selectedId && selected[0].kind === 'text') {
         event.preventDefault()
         setEditingId(selectedId)
         return
@@ -224,7 +260,7 @@ export default function App() {
       const nudge = nudges[event.key]
       if (nudge) {
         event.preventDefault()
-        dispatch({ type: 'move', id: selectedId, dx: nudge[0], dy: nudge[1] })
+        dispatch({ type: 'moveEach', moves: selectedIds.map((id) => ({ id, dx: nudge[0], dy: nudge[1] })) })
       }
     }
     window.addEventListener('keydown', handleKey)
@@ -601,7 +637,10 @@ export default function App() {
                 showFullPage={tool.kind === 'crop' && tool.ids.includes(ref.id)}
                 scale={zoom}
                 annotations={annotations.filter((annotation) => annotation.pageId === ref.id)}
-                selectedId={selectedId}
+                selectedIds={selectedIds}
+                groupOffset={groupOffset}
+                onGroupDrag={setGroupOffset}
+                onMoved={moveSelection}
                 editingId={editingId}
                 placing={tool.kind !== 'select'}
                 drawMode={tool.kind === 'rect' || tool.kind === 'redaction' || tool.kind === 'link' || tool.kind === 'crop' || tool.kind === 'markText' || (tool.kind === 'shape' && tool.variant !== 'ink') ? 'box' : tool.kind === 'shape' ? 'ink' : null}
@@ -612,13 +651,10 @@ export default function App() {
                 onMarkText={handleMarkText}
                 fieldValueOf={(name) => history.present.formValues[fieldKey(ref.file, name)]}
                 onFieldChange={(name, value) => dispatch({ type: 'setField', key: fieldKey(ref.file, name), value })}
-                onSelect={(id) => {
-                  if (id !== editingId) setEditingId(null)
-                  setSelectedId(id)
-                }}
+                onSelect={selectAnnotation}
                 onEdit={setEditingId}
                 onEditEnd={endEditing}
-                onRemove={removeAnnotation}
+                onRemove={(id) => removeAnnotations([id])}
                 dispatch={dispatch}
               />
             ))

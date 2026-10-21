@@ -53,6 +53,9 @@ export type EditorAction =
   /** 1回の操作として元に戻せるよう、まとめて置く（元の文字の編集では白塗りと打ち直した文字を同時に置く） */
   | { type: 'addMany'; annotations: Annotation[] }
   | { type: 'move'; id: string; dx: number; dy: number }
+  /** 選んだものをまとめて動かす。揃えるときはものごとに動かす量が違うので、それぞれに持たせる */
+  | { type: 'moveEach'; moves: { id: string; dx: number; dy: number }[] }
+  | { type: 'removeMany'; ids: string[] }
   | { type: 'resize'; id: string; width: number; height: number }
   | { type: 'editRect'; id: string; changes: Partial<RectStyle> }
   | { type: 'editShape'; id: string; changes: Partial<ShapeStyle> }
@@ -147,6 +150,20 @@ export function editorReducer(history: History, action: EditorAction): History {
       return { past: [], present: { pages: action.pages, annotations: [], formValues: {}, pageMarks: NO_PAGE_MARKS }, future: [] }
     case 'add':
       return commit(history, { ...present, annotations: [...present.annotations, action.annotation] })
+    case 'moveEach': {
+      const moves = new Map(action.moves.map((move) => [move.id, move]))
+      return commit(history, {
+        ...present,
+        annotations: present.annotations.map((a) => {
+          const move = moves.get(a.id)
+          return move ? { ...a, x: a.x + move.dx, y: a.y + move.dy } : a
+        }),
+      })
+    }
+    case 'removeMany': {
+      const ids = new Set(action.ids)
+      return commit(history, { ...present, annotations: present.annotations.filter((a) => !ids.has(a.id)) })
+    }
     case 'addMany':
       return commit(history, { ...present, annotations: [...present.annotations, ...action.annotations] })
     case 'move':

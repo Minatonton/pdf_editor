@@ -23,7 +23,10 @@ export function PageView({
   showFullPage,
   scale,
   annotations,
-  selectedId,
+  selectedIds,
+  groupOffset,
+  onGroupDrag,
+  onMoved,
   editingId,
   placing,
   drawMode,
@@ -52,7 +55,10 @@ export function PageView({
   showFullPage: boolean
   scale: number
   annotations: Annotation[]
-  selectedId: string | null
+  selectedIds: string[]
+  groupOffset: { dx: number; dy: number } | null
+  onGroupDrag: (offset: { dx: number; dy: number } | null) => void
+  onMoved: (id: string, dx: number, dy: number) => void
   editingId: string | null
   placing: boolean
   /** クリックではなく、ドラッグで描いて置く。box は始点と終点だけ、ink はなぞった点をすべて渡す */
@@ -65,7 +71,7 @@ export function PageView({
   onMarkText: (pageId: string, lines: TextRun[]) => void
   fieldValueOf: (name: string) => FieldValue | undefined
   onFieldChange: (name: string, value: FieldValue) => void
-  onSelect: (id: string | null) => void
+  onSelect: (id: string | null, additive?: boolean) => void
   onEdit: (id: string) => void
   onEditEnd: () => void
   onRemove: (id: string) => void
@@ -74,7 +80,8 @@ export function PageView({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const size = viewSizeOf(page)
   const visible = showFullPage ? { x: 0, y: 0, ...size } : visibleRectOf(page)
-  const selected = annotations.find((annotation) => annotation.id === selectedId)
+  // 操作の板は1つだけ選んでいるときに出す。複数のときは揃える板を出す
+  const selected = selectedIds.length === 1 ? annotations.find((annotation) => annotation.id === selectedIds[0]) : undefined
   const [drawing, setDrawing] = useState<Point[] | null>(null)
   // 描き終えた直後に続けて届く click を、何もない所のクリック（選択の解除）として扱わないための印
   const justDrew = useRef(false)
@@ -282,7 +289,10 @@ export function PageView({
             key={annotation.id}
             annotation={annotation}
             scale={scale}
-            selected={annotation.id === selectedId}
+            selected={selectedIds.includes(annotation.id)}
+            groupOffset={selectedIds.includes(annotation.id) ? groupOffset : null}
+            onGroupDrag={selectedIds.length > 1 && selectedIds.includes(annotation.id) ? onGroupDrag : undefined}
+            onMoved={onMoved}
             editing={annotation.id === editingId}
             // クリックで置く道具を持っていても、置いたものはつかめるようにする。道具を持ち替えないと動かせないと、
             // どのモードなら動かせるのか迷わせてしまう。範囲を描く道具のときだけは、描き始めとつかむ操作がぶつかるのでつかめない
