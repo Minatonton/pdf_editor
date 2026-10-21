@@ -25,6 +25,7 @@ type Tool =
   | { kind: 'select' }
   | { kind: 'text' }
   | { kind: 'editText' }
+  | { kind: 'markText'; mark: TextMark }
   | { kind: 'stamp'; text: string }
   /** width を指定しないときは、画像の画素数から大きさを決める */
   | { kind: 'image'; image: LoadedImage; width?: number }
@@ -37,6 +38,11 @@ const ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2]
 const POINTS_PER_PIXEL = 72 / 96
 const SIGNATURE_WIDTH = 150
 const SEAL_WIDTH = 42
+
+type TextMark = 'highlight' | 'underline' | 'strike'
+
+/** Acrobat の既定に近い色。ハイライトは黄色、下線は青、取り消し線は赤 */
+const MARK_COLORS: Record<Exclude<TextMark, 'highlight'>, string> = { underline: '#2f6fd0', strike: '#d6403f' }
 
 /** フォームになっていない書類に記入するときによく使う記号と、今日の日付 */
 function stampTexts(): string[] {
@@ -313,6 +319,38 @@ export default function App() {
     setTool({ kind: 'select' })
   }
 
+  const handleMarkText = (pageId: string, lines: TextRun[]) => {
+    if (tool.kind !== 'markText' || lines.length === 0) return
+    const { mark } = tool
+    dispatch({
+      type: 'addMany',
+      annotations: lines.map((line) => {
+        const id = crypto.randomUUID()
+        if (mark === 'highlight') {
+          return { id, kind: 'rect' as const, pageId, x: line.x, y: line.y, width: line.width, height: line.height, ...RECT_PRESETS[1].style }
+        }
+        // 下線は字面のすぐ下、取り消し線は小文字や仮名の真ん中あたりを通す
+        const y = mark === 'underline' ? line.baseline + line.fontSize * 0.12 : line.baseline - line.fontSize * 0.3
+        return {
+          id,
+          kind: 'shape' as const,
+          pageId,
+          variant: 'line' as const,
+          x: line.x,
+          y,
+          width: line.width,
+          height: 0,
+          points: [
+            [0, 0],
+            [1, 0],
+          ] as [number, number][],
+          color: MARK_COLORS[mark],
+          strokeWidth: Math.max(0.5, Math.round(line.fontSize * 0.07 * 2) / 2),
+        }
+      }),
+    })
+  }
+
   const handleExport = () => {
     if (!pdf) return
     void run(async () => {
@@ -353,6 +391,8 @@ export default function App() {
   const placingHint =
     tool.kind === 'editText'
       ? '書き換えたい文字の行をクリック'
+      : tool.kind === 'markText'
+        ? '印を付けたい文字の上をドラッグ（続けて何か所でも付けられる）'
       : tool.kind === 'text'
         ? 'テキストを置く場所をクリック'
       : tool.kind === 'stamp'
@@ -383,6 +423,20 @@ export default function App() {
         >
           文字を編集
         </button>
+        <select
+          disabled={!pdf}
+          value={tool.kind === 'markText' ? tool.mark : ''}
+          onChange={(event) =>
+            setTool(event.target.value ? { kind: 'markText', mark: event.target.value as TextMark } : { kind: 'select' })
+          }
+          aria-label="文字に印を付ける"
+          data-active={tool.kind === 'markText'}
+        >
+          <option value="">文字に印…</option>
+          <option value="highlight">ハイライト</option>
+          <option value="underline">下線</option>
+          <option value="strike">取り消し線</option>
+        </select>
         <button
           disabled={!pdf}
           aria-pressed={tool.kind === 'text'}
@@ -544,11 +598,12 @@ export default function App() {
                 selectedId={selectedId}
                 editingId={editingId}
                 placing={tool.kind !== 'select'}
-                drawMode={tool.kind === 'rect' || tool.kind === 'redaction' || (tool.kind === 'shape' && tool.variant !== 'ink') ? 'box' : tool.kind === 'shape' ? 'ink' : null}
+                drawMode={tool.kind === 'rect' || tool.kind === 'redaction' || tool.kind === 'markText' || (tool.kind === 'shape' && tool.variant !== 'ink') ? 'box' : tool.kind === 'shape' ? 'ink' : null}
                 onPlace={handlePlace}
                 onDraw={handleDraw}
-                pickText={tool.kind === 'editText'}
+                textMode={tool.kind === 'editText' ? 'pick' : tool.kind === 'markText' ? 'mark' : null}
                 onPickText={handlePickText}
+                onMarkText={handleMarkText}
                 onSelect={(id) => {
                   if (id !== editingId) setEditingId(null)
                   setSelectedId(id)

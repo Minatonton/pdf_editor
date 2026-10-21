@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { groupIntoLines, runFromItem, type Matrix, type TextRun } from './textRuns'
+import { groupIntoLines, linesInRect, runFromItem, type Matrix, type TextRun } from './textRuns'
 
 /** A4 縦のページを拡大率 1 で表示したときの viewport の変換（上下を反転して原点を左上へ） */
 const A4_VIEWPORT: Matrix = [1, 0, 0, -1, 0, 842]
@@ -40,5 +40,29 @@ describe('groupIntoLines', () => {
 
   it('同じ高さでも、間が大きく空いていれば表の別の列とみなして分ける', () => {
     expect(groupIntoLines([run('氏名', 10, 100, 20), run('山田', 200, 100, 20)])).toHaveLength(2)
+  })
+})
+
+describe('linesInRect', () => {
+  const lines = [run('1行目の文字', 10, 100, 60), run('2行目の文字', 10, 114, 60)]
+
+  it('範囲にかかる行を、範囲の左右で切り取る', () => {
+    const [line] = linesInRect(lines, { x: 30, y: 92, width: 20, height: 10 })
+    expect(line).toMatchObject({ x: 30, width: 20, baseline: 100 })
+  })
+
+  it('上下の行にかすっただけでは対象にしない', () => {
+    expect(linesInRect(lines, { x: 0, y: 92, width: 100, height: 10 }).map((l) => l.baseline)).toEqual([100])
+  })
+
+  it('複数の行にまたがる範囲では、どの行も範囲の左右で切り取る', () => {
+    expect(linesInRect(lines, { x: 0, y: 90, width: 40, height: 30 }).map((l) => [l.x, l.width])).toEqual([
+      [10, 30],
+      [10, 30],
+    ])
+  })
+
+  it('クリックしただけのときは、その点にある行を丸ごと選ぶ', () => {
+    expect(linesInRect(lines, { x: 50, y: 110, width: 0, height: 0 })).toEqual([lines[1]])
   })
 })

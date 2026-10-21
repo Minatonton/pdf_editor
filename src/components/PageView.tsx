@@ -4,7 +4,7 @@ import { viewSizeOf, type EditorAction, type PageRef } from '../editor/document'
 import type { Annotation } from '../annotations/types'
 import { boundsOf, type Point } from '../pdf/geometry'
 import { textLinesOf } from '../pdf/pageText'
-import type { TextRun } from '../pdf/textRuns'
+import { linesInRect, type TextRun } from '../pdf/textRuns'
 
 import { AnnotationBox } from './AnnotationBox'
 import { SelectionToolbar } from './SelectionToolbar'
@@ -21,8 +21,9 @@ export function PageView({
   drawMode,
   onPlace,
   onDraw,
-  pickText,
+  textMode,
   onPickText,
+  onMarkText,
   onSelect,
   onEdit,
   onEditEnd,
@@ -42,9 +43,10 @@ export function PageView({
   drawMode: 'box' | 'ink' | null
   onPlace: (pageId: string, x: number, y: number) => void
   onDraw: (pageId: string, points: Point[]) => void
-  /** 元の PDF の文字の行を、クリックして選べるように示す */
-  pickText: boolean
+  /** 元の PDF の文字の行を示す。pick はクリックで1行選び、mark はドラッグした範囲の行に印を付ける */
+  textMode: 'pick' | 'mark' | null
   onPickText: (pageId: string, line: TextRun) => void
+  onMarkText: (pageId: string, lines: TextRun[]) => void
   onSelect: (id: string | null) => void
   onEdit: (id: string) => void
   onEditEnd: () => void
@@ -60,7 +62,7 @@ export function PageView({
   const [textLines, setTextLines] = useState<TextRun[] | null>(null)
 
   useEffect(() => {
-    if (!pickText || !proxy) return
+    if (!textMode || !proxy) return
     let cancelled = false
     void textLinesOf(proxy, page.rotation).then((lines) => {
       if (!cancelled) setTextLines(lines)
@@ -68,7 +70,7 @@ export function PageView({
     return () => {
       cancelled = true
     }
-  }, [pickText, proxy, page.rotation])
+  }, [textMode, proxy, page.rotation])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -91,7 +93,7 @@ export function PageView({
       justDrew.current = false
       return
     }
-    if (event.target !== event.currentTarget || event.button !== 0 || drawMode || pickText) return
+    if (event.target !== event.currentTarget || event.button !== 0 || drawMode || textMode) return
     if (!placing) {
       onSelect(null)
       return
@@ -122,7 +124,9 @@ export function PageView({
         onPointerUp: (event: PointerEvent<HTMLDivElement>) => {
           if (!drawing) return
           const last = pointInPage(event)
-          onDraw(page.id, drawMode === 'ink' ? [...drawing, last] : [drawing[0], last])
+          const points = drawMode === 'ink' ? [...drawing, last] : [drawing[0], last]
+          if (textMode === 'mark') onMarkText(page.id, linesInRect(textLines ?? [], boundsOf(points)))
+          else onDraw(page.id, points)
           justDrew.current = true
           setDrawing(null)
         },
@@ -156,11 +160,12 @@ export function PageView({
             }}
           />
         )}
-        {pickText &&
+        {textMode &&
           textLines?.map((line, i) => (
             <button
               key={i}
               className="text-line"
+              data-mode={textMode}
               title={line.text}
               style={{ left: line.x * scale, top: line.y * scale, width: line.width * scale, height: line.height * scale }}
               onClick={(event) => {

@@ -83,3 +83,25 @@ export function groupIntoLines(runs: TextRun[]): TextRun[] {
   }
   return lines
 }
+
+/**
+ * ドラッグした範囲にかかる行を、範囲の左右で切り取って返す。
+ * 行の高さの3割以上が範囲に入っている行だけを対象にし、上下の行にかすっただけで印が付かないようにする。
+ * クリックしただけ（範囲がほぼない）のときは、その点にある行を丸ごと返す
+ */
+export function linesInRect(lines: TextRun[], rect: ViewRect): TextRun[] {
+  const clicked = rect.width < 2 && rect.height < 2
+  if (clicked) {
+    const hit = lines.find(
+      (line) => rect.x >= line.x && rect.x <= line.x + line.width && rect.y >= line.y && rect.y <= line.y + line.height,
+    )
+    return hit ? [hit] : []
+  }
+  return lines.flatMap((line) => {
+    const overlap = Math.min(line.y + line.height, rect.y + rect.height) - Math.max(line.y, rect.y)
+    const left = Math.max(line.x, rect.x)
+    const right = Math.min(line.x + line.width, rect.x + rect.width)
+    if (overlap < line.height * 0.3 || right <= left) return []
+    return [{ ...line, x: left, width: right - left }]
+  })
+}

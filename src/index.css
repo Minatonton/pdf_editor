@@ -561,3 +561,9 @@ button.danger {
   border-color: var(--accent);
   background: rgb(47 111 208 / 0.08);
 }
+
+/* 印を付けるときは行の上をドラッグするので、行の枠はクリックを受けず、下のページに通す */
+.text-line[data-mode='mark'] {
+  border-color: rgb(47 111 208 / 0.25);
+  pointer-events: none;
+}
