@@ -1,3 +1,4 @@
+import { whiteToTransparent } from '../annotations/imageFile'
 import { RECT_PRESETS, type Annotation } from '../annotations/types'
 import type { EditorAction } from '../editor/document'
 
@@ -45,6 +46,18 @@ export function SelectionToolbar({
             {preset.label}
           </button>
         ))}
+      {annotation.kind === 'image' && (
+        <button
+          onClick={() =>
+            void whiteToTransparent(annotation.bytes, annotation.format).then((bytes) =>
+              dispatch({ type: 'replaceImage', id: annotation.id, bytes, format: 'png' }),
+            )
+          }
+          title="スキャンした印鑑やサインの、白い紙の部分を透明にする"
+        >
+          白を透明に
+        </button>
+      )}
       {annotation.kind === 'shape' && <ShapeControls annotation={annotation} dispatch={dispatch} />}
       {annotation.kind === 'note' && (
         <textarea

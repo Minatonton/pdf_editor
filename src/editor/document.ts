@@ -54,6 +54,7 @@ export type EditorAction =
   | { type: 'editText'; id: string; changes: Partial<Pick<TextAnnotation, 'text' | 'fontSize' | 'color'>> }
   | { type: 'remove'; id: string }
   | { type: 'editNote'; id: string; text: string }
+  | { type: 'replaceImage'; id: string; bytes: Uint8Array; format: 'png' | 'jpeg' }
   | { type: 'setField'; key: string; value: FieldValue }
   | { type: 'setPageMark'; mark: keyof PageMarks; value: string }
   | { type: 'rotatePages'; ids: string[]; degrees: 90 | -90 }
@@ -133,6 +134,10 @@ export function editorReducer(history: History, action: EditorAction): History {
       const edited = { ...present, annotations: present.annotations.map(edit) }
       return typed(history, action.id, edited)
     }
+    case 'replaceImage':
+      return updateAnnotation(history, action.id, (a) =>
+        a.kind === 'image' ? { ...a, bytes: action.bytes, format: action.format } : a,
+      )
     case 'editNote':
       return typed(history, action.id, {
         ...present,
